@@ -1,0 +1,27 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "dns-sub-share",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "vars": {
+    "DNS_SUFFIX": "ddda.dpdns.org",
+    "CF_ZONE_ID": "ed0b451b965e84addf0757d3bf2086ee",
+    "DNS_POOLS": "[{\"suffix\":\"ddda.dpdns.org\",\"zoneId\":\"ed0b451b965e84addf0757d3bf2086ee\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.ggff.net\",\"zoneId\":\"76db1207ea8d1132e3f40702c6d9d36e\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.kdns.fr\",\"zoneId\":\"16d1fcec8ef216b42c42532ab3425110\",\"maxRecords\":190},{\"suffix\":\"wlbpg.kdns.fr\",\"zoneId\":\"929e19c968647c9b3d1fb4f331c541a7\",\"maxRecords\":190}]"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dns-sub-share-db",
+      "database_id": "6aeabe5f-4e14-4ae8-bc32-8442b0bbbfed",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["*/5 * * * *", "7 * * * *"]
+  }
+}

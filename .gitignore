@@ -1,0 +1,13 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+worker-configuration.d.ts
+dist/
+
+# Runtime data, deployment artifacts, and private design material.
+baota-app/data/
+work/
+outputs/
