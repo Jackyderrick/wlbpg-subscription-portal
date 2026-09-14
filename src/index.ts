@@ -8,6 +8,10 @@ type Env = {
   CF_API_TOKEN: string;
   ADMIN_SECRET: string;
   ACCESS_LOG_SALT?: string;
+  PAYMENT_API_BASE?: string;
+  PAYMENT_PID?: string;
+  PAYMENT_KEY?: string;
+  PUBLIC_BASE_URL?: string;
 };
 
 type DbUser = { id: number; name: string; upstream_id: number; expires_at: string; status: string; node_limit: number; dns_revision: number };
@@ -16,9 +20,16 @@ type PoolNode = DbNode & { source_name: string; upstream_id: number };
 type DnsRow = { id: number; hostname: string; cloudflare_record_id: string | null; zone_id: string | null };
 type SubscriptionUser = { id: number; status: string; expires_at: string };
 type DnsPool = { suffix: string; zoneId: string; maxRecords: number };
+type AppPlan = { id: string; name: string; amountCents: number; currency: string; days: number; nodeLimit: number; trafficGb: number | null };
+type AppSession = { user_id: number; device_id: number; expires_at: string; revoked_at: string | null };
+type AppOrder = { id: number; order_no: string; user_id: number; plan_id: string; status: string; amount_cents: number; currency: string; metadata_json?: string };
+type PaidAppOrder = { plan_id: string; amount_cents: number; currency: string; updated_at: string };
 
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const encoder = new TextEncoder();
+const appPlans: AppPlan[] = [
+  { id: "test_cny_1", name: "1 yuan test", amountCents: 100, currency: "CNY", days: 30, nodeLimit: 5, trafficGb: 100 },
+];
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: jsonHeaders });
@@ -97,6 +108,109 @@ async function secureEqual(a: string, b: string): Promise<boolean> {
 async function authorized(request: Request, env: Env): Promise<boolean> {
   const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   return secureEqual(supplied, env.ADMIN_SECRET);
+}
+
+function appPublicBase(request: Request, env: Env): string {
+  return (env.PUBLIC_BASE_URL || new URL(request.url).origin).replace(/\/$/, "");
+}
+
+function appPaymentBase(env: Env): string {
+  return (env.PAYMENT_API_BASE || "").replace(/\/$/, "");
+}
+
+function appPaymentConfigured(env: Env): boolean {
+  return Boolean(appPaymentBase(env) && env.PAYMENT_PID && env.PAYMENT_KEY);
+}
+
+function appPaymentSign(env: Env, values: Record<string, string>): string {
+  const source = Object.entries(values)
+    .filter(([key, value]) => key !== "sign" && key !== "sign_type" && value !== "")
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+  return md5(`${source}${env.PAYMENT_KEY || ""}`);
+}
+
+function md5(value: string): string {
+  // Cloudflare Workers expose Web Crypto but not MD5.  This compact fallback is
+  // used only for EPay-compatible signatures.
+  function add32(a: number, b: number) { return (a + b) & 0xffffffff; }
+  function cmn(q: number, a: number, b: number, x: number, s: number, t: number) {
+    a = add32(add32(a, q), add32(x, t));
+    return add32((a << s) | (a >>> (32 - s)), b);
+  }
+  function ff(a: number, b: number, c: number, d: number, x: number, s: number, t: number) { return cmn((b & c) | (~b & d), a, b, x, s, t); }
+  function gg(a: number, b: number, c: number, d: number, x: number, s: number, t: number) { return cmn((b & d) | (c & ~d), a, b, x, s, t); }
+  function hh(a: number, b: number, c: number, d: number, x: number, s: number, t: number) { return cmn(b ^ c ^ d, a, b, x, s, t); }
+  function ii(a: number, b: number, c: number, d: number, x: number, s: number, t: number) { return cmn(c ^ (b | ~d), a, b, x, s, t); }
+  function md5cycle(state: number[], block: number[]) {
+    let [a, b, c, d] = state;
+    a = ff(a, b, c, d, block[0], 7, -680876936); d = ff(d, a, b, c, block[1], 12, -389564586); c = ff(c, d, a, b, block[2], 17, 606105819); b = ff(b, c, d, a, block[3], 22, -1044525330);
+    a = ff(a, b, c, d, block[4], 7, -176418897); d = ff(d, a, b, c, block[5], 12, 1200080426); c = ff(c, d, a, b, block[6], 17, -1473231341); b = ff(b, c, d, a, block[7], 22, -45705983);
+    a = ff(a, b, c, d, block[8], 7, 1770035416); d = ff(d, a, b, c, block[9], 12, -1958414417); c = ff(c, d, a, b, block[10], 17, -42063); b = ff(b, c, d, a, block[11], 22, -1990404162);
+    a = ff(a, b, c, d, block[12], 7, 1804603682); d = ff(d, a, b, c, block[13], 12, -40341101); c = ff(c, d, a, b, block[14], 17, -1502002290); b = ff(b, c, d, a, block[15], 22, 1236535329);
+    a = gg(a, b, c, d, block[1], 5, -165796510); d = gg(d, a, b, c, block[6], 9, -1069501632); c = gg(c, d, a, b, block[11], 14, 643717713); b = gg(b, c, d, a, block[0], 20, -373897302);
+    a = gg(a, b, c, d, block[5], 5, -701558691); d = gg(d, a, b, c, block[10], 9, 38016083); c = gg(c, d, a, b, block[15], 14, -660478335); b = gg(b, c, d, a, block[4], 20, -405537848);
+    a = gg(a, b, c, d, block[9], 5, 568446438); d = gg(d, a, b, c, block[14], 9, -1019803690); c = gg(c, d, a, b, block[3], 14, -187363961); b = gg(b, c, d, a, block[8], 20, 1163531501);
+    a = gg(a, b, c, d, block[13], 5, -1444681467); d = gg(d, a, b, c, block[2], 9, -51403784); c = gg(c, d, a, b, block[7], 14, 1735328473); b = gg(b, c, d, a, block[12], 20, -1926607734);
+    a = hh(a, b, c, d, block[5], 4, -378558); d = hh(d, a, b, c, block[8], 11, -2022574463); c = hh(c, d, a, b, block[11], 16, 1839030562); b = hh(b, c, d, a, block[14], 23, -35309556);
+    a = hh(a, b, c, d, block[1], 4, -1530992060); d = hh(d, a, b, c, block[4], 11, 1272893353); c = hh(c, d, a, b, block[7], 16, -155497632); b = hh(b, c, d, a, block[10], 23, -1094730640);
+    a = hh(a, b, c, d, block[13], 4, 681279174); d = hh(d, a, b, c, block[0], 11, -358537222); c = hh(c, d, a, b, block[3], 16, -722521979); b = hh(b, c, d, a, block[6], 23, 76029189);
+    a = hh(a, b, c, d, block[9], 4, -640364487); d = hh(d, a, b, c, block[12], 11, -421815835); c = hh(c, d, a, b, block[15], 16, 530742520); b = hh(b, c, d, a, block[2], 23, -995338651);
+    a = ii(a, b, c, d, block[0], 6, -198630844); d = ii(d, a, b, c, block[7], 10, 1126891415); c = ii(c, d, a, b, block[14], 15, -1416354905); b = ii(b, c, d, a, block[5], 21, -57434055);
+    a = ii(a, b, c, d, block[12], 6, 1700485571); d = ii(d, a, b, c, block[3], 10, -1894986606); c = ii(c, d, a, b, block[10], 15, -1051523); b = ii(b, c, d, a, block[1], 21, -2054922799);
+    a = ii(a, b, c, d, block[8], 6, 1873313359); d = ii(d, a, b, c, block[15], 10, -30611744); c = ii(c, d, a, b, block[6], 15, -1560198380); b = ii(b, c, d, a, block[13], 21, 1309151649);
+    a = ii(a, b, c, d, block[4], 6, -145523070); d = ii(d, a, b, c, block[11], 10, -1120210379); c = ii(c, d, a, b, block[2], 15, 718787259); b = ii(b, c, d, a, block[9], 21, -343485551);
+    state[0] = add32(state[0], a); state[1] = add32(state[1], b); state[2] = add32(state[2], c); state[3] = add32(state[3], d);
+  }
+  const bytes = Array.from(new TextEncoder().encode(value));
+  const originalBits = bytes.length * 8;
+  bytes.push(0x80);
+  while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 0; i < 8; i++) bytes.push(Math.floor(originalBits / 2 ** (8 * i)) & 0xff);
+  const state = [1732584193, -271733879, -1732584194, 271733878];
+  for (let i = 0; i < bytes.length; i += 64) {
+    const block = Array.from({ length: 16 }, (_, j) => bytes[i + j * 4] | (bytes[i + j * 4 + 1] << 8) | (bytes[i + j * 4 + 2] << 16) | (bytes[i + j * 4 + 3] << 24));
+    md5cycle(state, block);
+  }
+  return state.flatMap(n => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255]).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function appSession(request: Request, env: Env): Promise<AppSession | null> {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
+  if (!token) return null;
+  const session = await env.DB.prepare("SELECT user_id,device_id,expires_at,revoked_at FROM app_sessions WHERE token_hash=?").bind(await hash(token)).first<AppSession>();
+  if (!session || session.revoked_at || Date.parse(session.expires_at) <= Date.now()) return null;
+  await env.DB.prepare("UPDATE app_sessions SET last_seen_at=CURRENT_TIMESTAMP WHERE token_hash=?").bind(await hash(token)).run();
+  return session;
+}
+
+async function requireAppSession(request: Request, env: Env): Promise<AppSession | Response> {
+  const session = await appSession(request, env);
+  return session ?? json({ error: "unauthorized" }, 401);
+}
+
+function appPaymentFields(request: Request, env: Env, order: AppOrder, plan: AppPlan): Record<string, string> {
+  const base = appPublicBase(request, env);
+  const fields: Record<string, string> = {
+    pid: String(env.PAYMENT_PID || ""),
+    out_trade_no: order.order_no,
+    notify_url: `${base}/api/app/payment/notify`,
+    return_url: `${base}/api/app/payment/return?order=${encodeURIComponent(order.order_no)}`,
+    name: plan.name,
+    money: (order.amount_cents / 100).toFixed(2),
+    param: String(order.user_id),
+  };
+  const metadata = safeJsonParse<Record<string, string>>(String((order as unknown as { metadata_json?: string }).metadata_json || "{}"), {});
+  const payType = metadata.paymentType || "";
+  if (["alipay", "wxpay"].includes(payType)) fields.type = payType;
+  fields.sign = appPaymentSign(env, fields);
+  fields.sign_type = "MD5";
+  return fields;
+}
+
+function safeJsonParse<T>(value: string, fallback: T): T {
+  try { return JSON.parse(value) as T; } catch { return fallback; }
 }
 
 function dnsPools(env: Env): DnsPool[] {
@@ -276,6 +390,209 @@ async function expireUsers(env: Env): Promise<number> {
   return users.results.length;
 }
 
+async function appUserPayload(request: Request, env: Env, userId: number, deviceId?: number): Promise<Record<string, unknown>> {
+  const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(userId).first<DbUser>();
+  if (!user) return { error: "user_not_found" };
+  const paidOrder = await env.DB.prepare(`
+    SELECT plan_id,amount_cents,currency,updated_at
+    FROM app_orders
+    WHERE user_id=? AND status='paid'
+    ORDER BY updated_at DESC,id DESC
+    LIMIT 1
+  `).bind(userId).first<PaidAppOrder>();
+  const device = deviceId
+    ? await env.DB.prepare("SELECT id,platform,app_version,model,created_at,last_seen_at,subscription_token FROM app_devices WHERE id=?").bind(deviceId).first<Record<string, unknown>>()
+    : await env.DB.prepare("SELECT id,platform,app_version,model,created_at,last_seen_at,subscription_token FROM app_devices WHERE user_id=? ORDER BY id DESC LIMIT 1").bind(userId).first<Record<string, unknown>>();
+  const token = String(device?.subscription_token || "");
+  const expiresAt = user.expires_at;
+  const configRevision = String(user.dns_revision ?? 0);
+  const activeUntil = Date.parse(expiresAt);
+  const paidPlan = paidOrder ? appPlans.find(plan => plan.id === paidOrder.plan_id) : null;
+  const isPaid = Boolean(paidOrder && user.status === "active" && Number.isFinite(activeUntil) && activeUntil > Date.now());
+  return {
+    configRevision,
+    dnsRevision: configRevision,
+    revision: configRevision,
+    user: { id: user.id, name: user.name, status: user.status, expiresAt, nodeLimit: user.node_limit, dnsRevision: configRevision },
+    device: device ? {
+      id: device.id,
+      platform: device.platform,
+      appVersion: device.app_version,
+      model: device.model,
+      createdAt: device.created_at,
+      lastSeenAt: device.last_seen_at,
+    } : null,
+    plan: {
+      type: isPaid ? "paid" : "trial",
+      id: paidPlan?.id ?? "trial",
+      name: paidPlan?.name ?? (isPaid ? "会员套餐" : "基础体验"),
+      nodeLimit: user.node_limit,
+      expiresAt,
+      amountCents: paidOrder?.amount_cents ?? 0,
+      currency: paidOrder?.currency ?? "CNY",
+      paidAt: paidOrder?.updated_at ?? null,
+    },
+    membership: { active: isPaid, expiresAt, planId: paidPlan?.id ?? null, planName: paidPlan?.name ?? null },
+    traffic: { usedBytes: 0, limitBytes: null },
+    subscription: token ? {
+      tokenHint: token.slice(0, 8),
+      status: user.status,
+      expiresAt,
+      activeDnsRecords: await activeDnsCount(env, user.id),
+      configRevision,
+      dnsRevision: configRevision,
+      revision: configRevision,
+      url: `${appPublicBase(request, env)}/api/subscription/${token}`,
+    } : null,
+    config: { revision: configRevision, dnsRevision: configRevision },
+  };
+}
+
+async function activeDnsCount(env: Env, userId: number): Promise<number> {
+  const row = await env.DB.prepare("SELECT COUNT(*) AS count FROM user_dns_records WHERE user_id=? AND status='active'").bind(userId).first<{ count: number }>();
+  return Number(row?.count || 0);
+}
+
+async function appApi(request: Request, env: Env, url: URL): Promise<Response | null> {
+  if (request.method === "GET" && url.pathname === "/api/app/plans") {
+    return json({ plans: appPlans });
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/app/bootstrap") {
+    const input = await body<{ device_uuid?: string; platform?: string; app_version?: string; version_code?: number; device_model?: string; android_version?: string }>(request);
+    const deviceUUID = String(input.device_uuid || "").trim().toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(deviceUUID)) return json({ error: "invalid_device_uuid" }, 400);
+    const deviceHash = await hash(deviceUUID);
+    let device = await env.DB.prepare("SELECT id,user_id,subscription_token FROM app_devices WHERE device_uuid_hash=?").bind(deviceHash).first<{ id: number; user_id: number; subscription_token: string | null }>();
+    if (!device) {
+      const upstream = await env.DB.prepare("SELECT id FROM upstreams WHERE enabled=1 ORDER BY id LIMIT 1").first<{ id: number }>();
+      if (!upstream) return json({ error: "no_upstream_available" }, 503);
+      const subscriptionToken = randomToken();
+      const expiresAt = new Date(Date.now() + 3 * 86400000).toISOString();
+      const userResult = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit) VALUES(?,?,?,?,?,?)")
+        .bind(`App Guest ${subscriptionToken.slice(0, 6)}`, await hash(subscriptionToken), subscriptionToken.slice(0, 8), upstream.id, expiresAt, 5).run();
+      const userId = Number(userResult.meta.last_row_id);
+      const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(userId).first<DbUser>();
+      if (user) await provisionUser(env, user);
+      const deviceResult = await env.DB.prepare("INSERT INTO app_devices(user_id,device_uuid_hash,subscription_token,platform,app_version,model) VALUES(?,?,?,?,?,?)")
+        .bind(userId, deviceHash, subscriptionToken, String(input.platform || "android"), String(input.app_version || ""), String(input.device_model || "")).run();
+      device = { id: Number(deviceResult.meta.last_row_id), user_id: userId, subscription_token: subscriptionToken };
+    } else {
+      await env.DB.prepare("UPDATE app_devices SET platform=?,app_version=?,model=?,last_seen_at=CURRENT_TIMESTAMP WHERE id=?")
+        .bind(String(input.platform || "android"), String(input.app_version || ""), String(input.device_model || ""), device.id).run();
+    }
+    const accessToken = randomToken();
+    const sessionExpiresAt = new Date(Date.now() + 30 * 86400000).toISOString();
+    await env.DB.prepare("INSERT INTO app_sessions(user_id,device_id,token_hash,expires_at) VALUES(?,?,?,?)")
+      .bind(device.user_id, device.id, await hash(accessToken), sessionExpiresAt).run();
+    return json({ ...(await appUserPayload(request, env, device.user_id, device.id)), access_token: accessToken, accessTokenExpiresAt: sessionExpiresAt }, 201);
+  }
+
+  if (request.method === "GET" && url.pathname === "/api/app/me") {
+    const session = await requireAppSession(request, env);
+    if (session instanceof Response) return session;
+    return json(await appUserPayload(request, env, session.user_id, session.device_id));
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/app/order") {
+    const session = await requireAppSession(request, env);
+    if (session instanceof Response) return session;
+    const input = await body<{ planId?: string; plan_id?: string; plan?: string; paymentType?: string; pay_type?: string; channel?: string }>(request);
+    const planId = String(input.planId || input.plan_id || input.plan || "").trim();
+    const plan = appPlans.find(item => item.id === planId);
+    if (!plan) return json({ error: "invalid_plan" }, 400);
+    const paymentType = String(input.paymentType || input.pay_type || input.channel || "cashier").trim();
+    if (!["cashier", "alipay", "wxpay"].includes(paymentType)) return json({ error: "invalid_payment_type" }, 400);
+    const provider = paymentType === "alipay" ? "alipay" : paymentType === "wxpay" ? "wechat" : "manual";
+    const orderNo = `A${Date.now()}${randomToken(4)}`;
+    await env.DB.prepare("INSERT INTO app_orders(order_no,user_id,plan_id,provider,status,amount_cents,currency,metadata_json) VALUES(?,?,?,?,?,?,?,?)")
+      .bind(orderNo, session.user_id, plan.id, provider, "pending", plan.amountCents, plan.currency, JSON.stringify({ paymentType })).run();
+    const order = await env.DB.prepare("SELECT id,order_no,user_id,plan_id,status,amount_cents,currency,metadata_json FROM app_orders WHERE order_no=?").bind(orderNo).first<AppOrder>();
+    return json({
+      order: order ? appOrderPayload(request, env, order, plan) : null,
+      paymentConfigured: appPaymentConfigured(env),
+    }, 201);
+  }
+
+  const orderMatch = url.pathname.match(/^\/api\/app\/order\/([^/]+)$/);
+  if (request.method === "GET" && orderMatch) {
+    const session = await requireAppSession(request, env);
+    if (session instanceof Response) return session;
+    const order = await env.DB.prepare("SELECT id,order_no,user_id,plan_id,status,amount_cents,currency,metadata_json FROM app_orders WHERE order_no=? OR id=?")
+      .bind(orderMatch[1], Number(orderMatch[1]) || -1).first<AppOrder>();
+    if (!order || order.user_id !== session.user_id) return json({ error: "order_not_found" }, 404);
+    const plan = appPlans.find(item => item.id === order.plan_id) || appPlans[0];
+    return json({ order: appOrderPayload(request, env, order, plan) });
+  }
+
+  return null;
+}
+
+function appOrderPayload(request: Request, env: Env, order: AppOrder, plan: AppPlan): Record<string, unknown> {
+  const payUrl = `${appPublicBase(request, env)}/app-pay/${encodeURIComponent(order.order_no)}`;
+  return {
+    id: order.id,
+    orderNo: order.order_no,
+    planId: order.plan_id,
+    status: order.status,
+    amountCents: order.amount_cents,
+    currency: order.currency,
+    payUrl,
+    paymentUrl: payUrl,
+    checkoutUrl: payUrl,
+    plan,
+  };
+}
+
+async function appPaymentPage(request: Request, env: Env, orderNo: string): Promise<Response> {
+  const order = await env.DB.prepare("SELECT id,order_no,user_id,plan_id,status,amount_cents,currency,metadata_json FROM app_orders WHERE order_no=?").bind(orderNo).first<AppOrder>();
+  if (!order) return new Response("Order not found", { status: 404 });
+  if (order.status === "paid") return new Response("<!doctype html><meta charset=\"utf-8\"><p>Payment already completed. You can return to the app.</p>", { headers: { "content-type": "text/html; charset=utf-8" } });
+  if (!appPaymentConfigured(env)) return new Response("<!doctype html><meta charset=\"utf-8\"><p>Payment is not configured. Please set PAYMENT_API_BASE, PAYMENT_PID and PAYMENT_KEY.</p>", { status: 503, headers: { "content-type": "text/html; charset=utf-8" } });
+  const plan = appPlans.find(item => item.id === order.plan_id) || appPlans[0];
+  const fields = appPaymentFields(request, env, order, plan);
+  const inputs = Object.entries(fields).map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}">`).join("");
+  return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>Pay</title></head><body><form id="pay" method="post" action="${escapeHtml(appPaymentBase(env))}/submit.php">${inputs}<button type="submit">Continue to pay</button></form><script>document.getElementById('pay').submit();</script></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+}
+
+async function appPaymentReturn(request: Request, env: Env): Promise<Response> {
+  const orderNo = new URL(request.url).searchParams.get("order") || "";
+  const order = orderNo
+    ? await env.DB.prepare("SELECT status FROM app_orders WHERE order_no=?").bind(orderNo).first<{ status: string }>()
+    : null;
+  const paid = order?.status === "paid";
+  return new Response(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment</title><style>body{font-family:system-ui,sans-serif;margin:0;display:grid;min-height:100vh;place-items:center;background:#f7faf7;color:#102016}.card{width:min(420px,calc(100vw - 32px));border:1px solid #dfe8de;border-radius:18px;background:white;padding:28px;box-shadow:0 18px 50px #10201614}h1{font-size:22px;margin:0 0 10px}p{color:#5d6b61;line-height:1.7}</style></head><body><main class="card"><h1>${paid ? "支付已确认" : "支付处理中"}</h1><p>${paid ? "会员已开通，请返回外贸加速器并刷新订阅。" : "如果已经完成支付，请稍等片刻后返回 App 点击“我已支付，刷新订阅”。"}</p></main></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;" }[c] || c));
+}
+
+async function appPaymentCallback(request: Request, env: Env): Promise<Response> {
+  const values: Record<string, string> = request.method === "POST"
+    ? Array.from((await request.formData()).entries()).reduce<Record<string, string>>((acc, [key, value]) => { acc[key] = String(value); return acc; }, {})
+    : Object.fromEntries(new URL(request.url).searchParams.entries());
+  if (!appPaymentConfigured(env)) return new Response("fail", { status: 503 });
+  if (String(values.pid || "") !== String(env.PAYMENT_PID || "") || !values.sign || !(await secureEqual(values.sign, appPaymentSign(env, values)))) return new Response("fail", { status: 400 });
+  const orderNo = String(values.out_trade_no || "");
+  const order = await env.DB.prepare("SELECT id,order_no,user_id,plan_id,status,amount_cents,currency FROM app_orders WHERE order_no=?").bind(orderNo).first<AppOrder>();
+  if (!order) return new Response("fail", { status: 404 });
+  const paid = String(values.trade_status || "").toUpperCase() === "TRADE_SUCCESS" || String(values.status || "").toLowerCase() === "paid";
+  if (!paid || Number(values.money) !== Number((order.amount_cents / 100).toFixed(2))) return new Response("fail", { status: 400 });
+  if (order.status !== "paid") {
+    const plan = appPlans.find(item => item.id === order.plan_id) || appPlans[0];
+    const current = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(order.user_id).first<DbUser>();
+    if (!current) return new Response("fail", { status: 404 });
+    const startsAt = Math.max(Date.now(), Date.parse(current.expires_at || "") || 0);
+    const expiresAt = new Date(startsAt + plan.days * 86400000).toISOString();
+    await env.DB.prepare("UPDATE users SET expires_at=?,status='active',node_limit=? WHERE id=?").bind(expiresAt, plan.nodeLimit, current.id).run();
+    const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(current.id).first<DbUser>();
+    if (user) await provisionUser(env, user);
+    await env.DB.prepare("UPDATE app_orders SET status='paid',provider_order_id=?,updated_at=CURRENT_TIMESTAMP WHERE id=?").bind(String(values.trade_no || ""), order.id).run();
+  }
+  return new Response("success", { headers: { "content-type": "text/plain; charset=utf-8" } });
+}
+
 async function api(request: Request, env: Env, url: URL): Promise<Response> {
   if (!(await authorized(request, env))) return json({ error: "未授权" }, 401);
   if (request.method === "GET" && url.pathname === "/api/dashboard") {
@@ -420,6 +737,16 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(request.url);
+      if (url.pathname.startsWith("/api/app/")) {
+        const response = await appApi(request, env, url);
+        if (response) return response;
+      }
+      if (url.pathname === "/api/app/payment/notify") return appPaymentCallback(request, env);
+      if (url.pathname === "/api/app/payment/return") return appPaymentReturn(request, env);
+      const appPayMatch = url.pathname.match(/^\/app-pay\/([^/]+)$/);
+      if (request.method === "GET" && appPayMatch) return appPaymentPage(request, env, decodeURIComponent(appPayMatch[1]));
+      const appSubscriptionMatch = url.pathname.match(/^\/api\/subscription\/([A-Za-z0-9_-]{20,})$/);
+      if (request.method === "GET" && appSubscriptionMatch) return subscription(request, env, appSubscriptionMatch[1]);
       if (url.pathname.startsWith("/api/")) return api(request, env, url);
       const match = url.pathname.match(/^\/s\/([A-Za-z0-9_-]{20,})$/);
       if (request.method === "GET" && match) return subscription(request, env, match[1]);
