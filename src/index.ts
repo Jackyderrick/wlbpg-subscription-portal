@@ -12,6 +12,13 @@ type Env = {
   PAYMENT_PID?: string;
   PAYMENT_KEY?: string;
   PUBLIC_BASE_URL?: string;
+  APP_UPDATE_VERSION_CODE?: string;
+  APP_UPDATE_VERSION_NAME?: string;
+  APP_UPDATE_APK_URL?: string;
+  APP_UPDATE_RELEASE_URL?: string;
+  APP_UPDATE_MESSAGE?: string;
+  APP_UPDATE_FORCE?: string;
+  APP_UPDATE_SHA256?: string;
 };
 
 type DbUser = { id: number; name: string; upstream_id: number; expires_at: string; status: string; node_limit: number; dns_revision: number };
@@ -28,8 +35,23 @@ type PaidAppOrder = { plan_id: string; amount_cents: number; currency: string; u
 const jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 const encoder = new TextEncoder();
 const appPlans: AppPlan[] = [
-  { id: "test_cny_1", name: "1 yuan test", amountCents: 100, currency: "CNY", days: 30, nodeLimit: 5, trafficGb: 100 },
+  { id: "trial_1d", name: "体验版", amountCents: 100, currency: "CNY", days: 1, nodeLimit: 3, trafficGb: 5 },
+  { id: "basic_monthly", name: "基础版", amountCents: 1990, currency: "CNY", days: 30, nodeLimit: 5, trafficGb: 100 },
+  { id: "standard_monthly", name: "标准版", amountCents: 2990, currency: "CNY", days: 30, nodeLimit: 10, trafficGb: 300 },
+  { id: "standard_quarterly", name: "季度版", amountCents: 7990, currency: "CNY", days: 90, nodeLimit: 10, trafficGb: 900 },
+  { id: "standard_yearly", name: "年费版", amountCents: 19900, currency: "CNY", days: 365, nodeLimit: 10, trafficGb: 3600 },
 ];
+
+const defaultAppUpdate = {
+  versionCode: 730,
+  versionName: "1.14.0",
+  apkUrl: "",
+  releaseUrl: "https://www.wlbpg.com",
+  title: "发现新版本",
+  message: "",
+  force: false,
+  sha256: "",
+};
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: jsonHeaders });
@@ -454,6 +476,27 @@ async function activeDnsCount(env: Env, userId: number): Promise<number> {
 }
 
 async function appApi(request: Request, env: Env, url: URL): Promise<Response | null> {
+  if (request.method === "GET" && url.pathname === "/api/app/update") {
+    const versionCode = Number(env.APP_UPDATE_VERSION_CODE || defaultAppUpdate.versionCode);
+    const versionName = String(env.APP_UPDATE_VERSION_NAME || defaultAppUpdate.versionName);
+    const apkUrl = String(env.APP_UPDATE_APK_URL || defaultAppUpdate.apkUrl);
+    const releaseUrl = String(env.APP_UPDATE_RELEASE_URL || apkUrl || defaultAppUpdate.releaseUrl);
+    const message = String(env.APP_UPDATE_MESSAGE || defaultAppUpdate.message);
+    const force = String(env.APP_UPDATE_FORCE || "").toLowerCase() === "true";
+    return json({
+      versionCode,
+      versionName,
+      force,
+      title: String(env.APP_UPDATE_MESSAGE ? "发现新版本" : defaultAppUpdate.title),
+      message,
+      releaseNotes: message,
+      apkUrl,
+      downloadUrl: apkUrl,
+      releaseUrl,
+      sha256: String(env.APP_UPDATE_SHA256 || defaultAppUpdate.sha256),
+    });
+  }
+
   if (request.method === "GET" && url.pathname === "/api/app/plans") {
     return json({ plans: appPlans });
   }
