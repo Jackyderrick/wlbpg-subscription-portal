@@ -11,8 +11,21 @@
   "vars": {
     "DNS_SUFFIX": "ddda.dpdns.org",
     "CF_ZONE_ID": "ed0b451b965e84addf0757d3bf2086ee",
-    "DNS_POOLS": "[{\"suffix\":\"ddda.dpdns.org\",\"zoneId\":\"ed0b451b965e84addf0757d3bf2086ee\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.ggff.net\",\"zoneId\":\"76db1207ea8d1132e3f40702c6d9d36e\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.kdns.fr\",\"zoneId\":\"16d1fcec8ef216b42c42532ab3425110\",\"maxRecords\":190},{\"suffix\":\"wlbpg.kdns.fr\",\"zoneId\":\"929e19c968647c9b3d1fb4f331c541a7\",\"maxRecords\":190}]"
+    "DNS_POOLS": "[{\"suffix\":\"ddda.dpdns.org\",\"zoneId\":\"ed0b451b965e84addf0757d3bf2086ee\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.ggff.net\",\"zoneId\":\"76db1207ea8d1132e3f40702c6d9d36e\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.kdns.fr\",\"zoneId\":\"16d1fcec8ef216b42c42532ab3425110\",\"maxRecords\":190},{\"suffix\":\"wlbpg.kdns.fr\",\"zoneId\":\"929e19c968647c9b3d1fb4f331c541a7\",\"maxRecords\":190}]",
+    "APP_UPDATE_VERSION_CODE": "731",
+    "APP_UPDATE_VERSION_NAME": "1.14.1",
+    "APP_UPDATE_APK_URL": "https://app.5858188.xyz/downloads/android/waimao-accelerator-1.14.1.apk",
+    "APP_UPDATE_RELEASE_URL": "https://app.5858188.xyz/downloads/android/waimao-accelerator-1.14.1.apk",
+    "APP_UPDATE_MESSAGE": "新增邮箱绑定功能，邮箱可作为账号辅助凭证。",
+    "APP_UPDATE_FORCE": "false",
+    "APP_UPDATE_SHA256": "5879A6CE7C583BBDB77EE14C8B90B5B3ED4F4305EA3AEA8F57F1743B9EEBC76F"
   },
+  "r2_buckets": [
+    {
+      "binding": "APP_RELEASES",
+      "bucket_name": "waimao-app-releases"
+    }
+  ],
   "d1_databases": [
     {
       "binding": "DB",

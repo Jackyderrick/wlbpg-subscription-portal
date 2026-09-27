@@ -2,6 +2,7 @@ import { connectionIdentity, dnsType, encodeSubscription, parseSubscription, rew
 
 type Env = {
   DB: D1Database;
+  APP_RELEASES?: R2Bucket;
   DNS_SUFFIX: string;
   CF_ZONE_ID: string;
   DNS_POOLS?: string;
@@ -776,10 +777,28 @@ async function run(fn){try{await fn()}catch(e){document.querySelector('#error').
 if(key)load();
 </script></body></html>`;
 
+async function downloadRelease(env: Env, pathname: string, method: string): Promise<Response> {
+  if (!env.APP_RELEASES) return new Response("release storage is not configured", { status: 503 });
+  const key = decodeURIComponent(pathname.replace(/^\/downloads\/+/, ""));
+  if (!key || key.includes("..")) return new Response("Not Found", { status: 404 });
+  const object = await env.APP_RELEASES.get(key);
+  if (!object) return new Response("Not Found", { status: 404 });
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", "public, max-age=300");
+  if (!headers.has("content-type")) headers.set("content-type", "application/vnd.android.package-archive");
+  headers.set("content-disposition", `attachment; filename="${key.split("/").pop() || "app.apk"}"`);
+  return new Response(method === "HEAD" ? null : object.body, { headers });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     try {
       const url = new URL(request.url);
+      if ((request.method === "GET" || request.method === "HEAD") && url.pathname.startsWith("/downloads/")) {
+        return downloadRelease(env, url.pathname, request.method);
+      }
       if (url.pathname.startsWith("/api/app/")) {
         const response = await appApi(request, env, url);
         if (response) return response;
