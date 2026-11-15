@@ -16,13 +16,13 @@
     "APP_TRIAL_DAYS": "3",
     "APP_TRIAL_NODE_LIMIT": "5",
     "APP_PLANS_JSON": "[{\"id\":\"monthly\",\"name\":\"Monthly\",\"amountCents\":999,\"currency\":\"USD\",\"days\":30,\"nodeLimit\":8,\"trafficGb\":100},{\"id\":\"quarterly\",\"name\":\"Quarterly\",\"amountCents\":2499,\"currency\":\"USD\",\"days\":90,\"nodeLimit\":12,\"trafficGb\":300}]",
-    "APP_UPDATE_VERSION_CODE": "10002",
+    "APP_UPDATE_VERSION_CODE": "10003",
     "APP_UPDATE_VERSION_NAME": "1.15.0-alpha.13",
     "APP_UPDATE_APK_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk",
-    "APP_UPDATE_RELEASE_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk",
-    "APP_UPDATE_MESSAGE": "1. 升级内核至 SFA 1.15.0-alpha.13\n2. 深度精简瘦身至 37MB（减少 58% 体积）\n3. 修复通知栏乱码并启用商业化永久签名",
+    "APP_UPDATE_RELEASE_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-1.15.0-alpha.13.apk",
+    "APP_UPDATE_MESSAGE": "1. 优化更新设置页面，精简冗余功能\n2. 彻底消除前台通知图标红点“1”字角标\n3. 深度瘦身混淆优化（体积缩减 58% 至 37MB）\n4. 内置 30 年永久统一证书，彻底杜绝安装冲突",
     "APP_UPDATE_FORCE": "false",
-    "APP_UPDATE_SHA256": "24560a2614347402f85f29a6e18b910982bbdd54f3e4ff9d3a88dd44f38c7e10"
+    "APP_UPDATE_SHA256": "30CAD20AF8B21BDAF7E4941F0358878BD58BEDE4D0D78B4E63FC251ADCC0B206"
   },
   "d1_databases": [
     {
