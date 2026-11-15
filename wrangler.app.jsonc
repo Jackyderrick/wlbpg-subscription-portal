@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "dns-sub-share-app",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-14",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "vars": {
+    "DNS_SUFFIX": "ddda.dpdns.org",
+    "CF_ZONE_ID": "ed0b451b965e84addf0757d3bf2086ee",
+    "DNS_POOLS": "[{\"suffix\":\"ddda.dpdns.org\",\"zoneId\":\"ed0b451b965e84addf0757d3bf2086ee\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.ggff.net\",\"zoneId\":\"76db1207ea8d1132e3f40702c6d9d36e\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.kdns.fr\",\"zoneId\":\"16d1fcec8ef216b42c42532ab3425110\",\"maxRecords\":190},{\"suffix\":\"wlbpg.kdns.fr\",\"zoneId\":\"929e19c968647c9b3d1fb4f331c541a7\",\"maxRecords\":190}]",
+    "APP_DEFAULT_UPSTREAM_ID": "1",
+    "APP_TRIAL_DAYS": "3",
+    "APP_TRIAL_NODE_LIMIT": "5",
+    "APP_PLANS_JSON": "[{\"id\":\"monthly\",\"name\":\"Monthly\",\"amountCents\":999,\"currency\":\"USD\",\"days\":30,\"nodeLimit\":8,\"trafficGb\":100},{\"id\":\"quarterly\",\"name\":\"Quarterly\",\"amountCents\":2499,\"currency\":\"USD\",\"days\":90,\"nodeLimit\":12,\"trafficGb\":300}]",
+    "APP_UPDATE_VERSION_CODE": "10002",
+    "APP_UPDATE_VERSION_NAME": "1.15.0-alpha.13",
+    "APP_UPDATE_APK_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk",
+    "APP_UPDATE_RELEASE_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk",
+    "APP_UPDATE_MESSAGE": "1. 升级内核至 SFA 1.15.0-alpha.13\n2. 深度精简瘦身至 37MB（减少 58% 体积）\n3. 修复通知栏乱码并启用商业化永久签名",
+    "APP_UPDATE_FORCE": "false",
+    "APP_UPDATE_SHA256": "24560a2614347402f85f29a6e18b910982bbdd54f3e4ff9d3a88dd44f38c7e10"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "dns-sub-share-app-db",
+      "database_id": "bb1aea03-434b-4994-8ee4-49c6fc28127e",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
