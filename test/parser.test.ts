@@ -23,4 +23,27 @@ describe("subscription parser", () => {
     expect(decoded.add).toBe("u2-hk.node.example.com");
     expect(decoded.sni).toBe("hk.airport.test");
   });
+
+  it("parses multiline direct node links (vless, trojan, vmess)", async () => {
+    const vless = "vless://u1@us-res-01.isp.net:443?security=tls#%E7%BE%8E%E5%9B%BD%E5%AE%B6%E5%AE%BD-01";
+    const trojan = "trojan://pass@hk-direct.isp.net:443#%E9%A6%99%E6%B8%AF%E4%B8%93%E7%BA%BF-02";
+    const rawInput = `${vless}\n\n${trojan}\n`;
+    const nodes = await parseSubscription(rawInput);
+    expect(nodes.length).toBe(2);
+    expect(nodes[0].name).toBe("美国家宽-01");
+    expect(nodes[0].protocol).toBe("vless");
+    expect(nodes[0].server).toBe("us-res-01.isp.net");
+    expect(nodes[1].name).toBe("香港专线-02");
+    expect(nodes[1].protocol).toBe("trojan");
+    expect(nodes[1].server).toBe("hk-direct.isp.net");
+  });
+
+  it("parses base64-encoded raw node text", async () => {
+    const vless = "vless://u1@us-res-02.isp.net:443?security=tls#US-Residential";
+    const encoded = btoa(vless);
+    const nodes = await parseSubscription(encoded);
+    expect(nodes.length).toBe(1);
+    expect(nodes[0].server).toBe("us-res-02.isp.net");
+    expect(nodes[0].name).toBe("US-Residential");
+  });
 });
