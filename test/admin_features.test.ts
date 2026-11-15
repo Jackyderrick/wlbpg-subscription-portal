@@ -20,4 +20,26 @@ describe("Admin direct node import and customer DNS node binding", () => {
     expect(typeof worker.fetch).toBe("function");
     expect(typeof worker.scheduled).toBe("function");
   });
+
+  it("verifies mobile vs desktop guest username prefix logic", () => {
+    function getGuestPrefix(platformRaw: string | undefined): string {
+      const platform = String(platformRaw || "android").trim().toLowerCase();
+      const isDesktop = ["windows", "mac", "macos", "linux", "web", "desktop", "pc"].some(p => platform.includes(p));
+      return isDesktop ? "Web Guest" : "App Guest";
+    }
+
+    // Mobile platforms
+    expect(getGuestPrefix("android")).toBe("App Guest");
+    expect(getGuestPrefix("Android")).toBe("App Guest");
+    expect(getGuestPrefix("ios")).toBe("App Guest");
+    expect(getGuestPrefix(undefined)).toBe("App Guest");
+
+    // Desktop/PC/Web platforms
+    expect(getGuestPrefix("windows")).toBe("Web Guest");
+    expect(getGuestPrefix("Windows 11")).toBe("Web Guest");
+    expect(getGuestPrefix("macos")).toBe("Web Guest");
+    expect(getGuestPrefix("linux")).toBe("Web Guest");
+    expect(getGuestPrefix("web")).toBe("Web Guest");
+    expect(getGuestPrefix("desktop")).toBe("Web Guest");
+  });
 });

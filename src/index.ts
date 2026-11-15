@@ -1283,20 +1283,23 @@ async function appApi(request, env, url) {
     const deviceUUID = String(input.device_uuid || "").trim().toLowerCase();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(deviceUUID)) return json({ error: "invalid_device_uuid" }, 400);
     const deviceHash = await hash(deviceUUID);
+    const platform = String(input.platform || "android").trim().toLowerCase();
+    const isDesktop = ["windows", "mac", "macos", "linux", "web", "desktop", "pc"].some(p => platform.includes(p));
+    const guestPrefix = isDesktop ? "Web Guest" : "App Guest";
     let device = await env.DB.prepare("SELECT id,user_id,subscription_token FROM app_devices WHERE device_uuid_hash=?").bind(deviceHash).first();
     if (!device) {
       const upstream = await env.DB.prepare("SELECT id FROM upstreams WHERE enabled=1 ORDER BY id LIMIT 1").first();
       if (!upstream) return json({ error: "no_upstream_available" }, 503);
       const subscriptionToken = randomToken();
       const expiresAt = new Date(Date.now() + 3 * 864e5).toISOString();
-      const userResult = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit) VALUES(?,?,?,?,?,?)").bind(`App Guest ${subscriptionToken.slice(0, 6)}`, await hash(subscriptionToken), subscriptionToken.slice(0, 8), upstream.id, expiresAt, 5).run();
+      const userResult = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit) VALUES(?,?,?,?,?,?)").bind(`${guestPrefix} ${subscriptionToken.slice(0, 6)}`, await hash(subscriptionToken), subscriptionToken.slice(0, 8), upstream.id, expiresAt, 5).run();
       const userId = Number(userResult.meta.last_row_id);
       const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(userId).first();
       if (user) await provisionUser(env, user);
-      const deviceResult = await env.DB.prepare("INSERT INTO app_devices(user_id,device_uuid_hash,subscription_token,platform,app_version,model) VALUES(?,?,?,?,?,?)").bind(userId, deviceHash, subscriptionToken, String(input.platform || "android"), String(input.app_version || ""), String(input.device_model || "")).run();
+      const deviceResult = await env.DB.prepare("INSERT INTO app_devices(user_id,device_uuid_hash,subscription_token,platform,app_version,model) VALUES(?,?,?,?,?,?)").bind(userId, deviceHash, subscriptionToken, platform, String(input.app_version || ""), String(input.device_model || "")).run();
       device = { id: Number(deviceResult.meta.last_row_id), user_id: userId, subscription_token: subscriptionToken };
     } else {
-      await env.DB.prepare("UPDATE app_devices SET platform=?,app_version=?,model=?,last_seen_at=CURRENT_TIMESTAMP WHERE id=?").bind(String(input.platform || "android"), String(input.app_version || ""), String(input.device_model || ""), device.id).run();
+      await env.DB.prepare("UPDATE app_devices SET platform=?,app_version=?,model=?,last_seen_at=CURRENT_TIMESTAMP WHERE id=?").bind(platform, String(input.app_version || ""), String(input.device_model || ""), device.id).run();
     }
     const accessToken = randomToken();
     const sessionExpiresAt = new Date(Date.now() + 30 * 864e5).toISOString();
@@ -1352,7 +1355,7 @@ async function appApi(request, env, url) {
     const profile = await upsertUserProfile(env, session.user_id, { email: input.email, nickname: input.nickname });
     if (profile.error) return json({ error: profile.error }, profile.error === "email_already_bound" ? 409 : 400);
     if (input.nickname) {
-      await env.DB.prepare("UPDATE users SET name=? WHERE id=? AND name LIKE 'App Guest %'").bind(String(input.nickname).trim().slice(0, 80), session.user_id).run();
+      await env.DB.prepare("UPDATE users SET name=? WHERE id=? AND (name LIKE 'App Guest %' OR name LIKE 'Web Guest %')").bind(String(input.nickname).trim().slice(0, 80), session.user_id).run();
     }
     return json({ ok: true, email: profile.email, emailBound: profile.emailBound, emailBoundAt: profile.emailBoundAt, user: (await appUserPayload(request, env, session.user_id, session.device_id)).user });
   }
@@ -1363,7 +1366,7 @@ async function appApi(request, env, url) {
     const profile = await upsertUserProfile(env, session.user_id, input);
     if (profile.error) return json({ error: profile.error }, profile.error === "email_already_bound" ? 409 : 400);
     if (input.nickname) {
-      await env.DB.prepare("UPDATE users SET name=? WHERE id=? AND name LIKE 'App Guest %'").bind(String(input.nickname).trim().slice(0, 80), session.user_id).run();
+      await env.DB.prepare("UPDATE users SET name=? WHERE id=? AND (name LIKE 'App Guest %' OR name LIKE 'Web Guest %')").bind(String(input.nickname).trim().slice(0, 80), session.user_id).run();
     }
     return json({ profile, user: (await appUserPayload(request, env, session.user_id, session.device_id)).user });
   }
