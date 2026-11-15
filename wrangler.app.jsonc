@@ -16,13 +16,13 @@
     "APP_TRIAL_DAYS": "3",
     "APP_TRIAL_NODE_LIMIT": "5",
     "APP_PLANS_JSON": "[{\"id\":\"monthly\",\"name\":\"Monthly\",\"amountCents\":999,\"currency\":\"USD\",\"days\":30,\"nodeLimit\":8,\"trafficGb\":100},{\"id\":\"quarterly\",\"name\":\"Quarterly\",\"amountCents\":2499,\"currency\":\"USD\",\"days\":90,\"nodeLimit\":12,\"trafficGb\":300}]",
-    "APP_UPDATE_VERSION_CODE": "10004",
+    "APP_UPDATE_VERSION_CODE": "10005",
     "APP_UPDATE_VERSION_NAME": "1.15.0-alpha.13",
     "APP_UPDATE_APK_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk",
     "APP_UPDATE_RELEASE_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-1.15.0-alpha.13.apk",
-    "APP_UPDATE_MESSAGE": "1. 彻底修复启动服务时的通知渠道冲突错误\n2. 消除桌面图标红色“1”字未读角标\n3. 优化更新设置页面，精简冗余功能\n4. 深度瘦身混淆优化（体积缩减 58% 至 37MB）",
+    "APP_UPDATE_MESSAGE": "1. 用户中心新增“官方网站”入口（https://dl.5858188.xyz）\n2. 彻底解决服务启动通知渠道异常\n3. 消除桌面图标红色“1”字角标\n4. 深度瘦身混淆优化（体积缩减 58% 至 37MB）",
     "APP_UPDATE_FORCE": "false",
-    "APP_UPDATE_SHA256": "24F7DEB8458F5784A74E763A83E2698798EF77037A3801BD1256891569A45CD0"
+    "APP_UPDATE_SHA256": "9105CF1559D9A6E4D80550E454FB9DAD513024C9D0B09D11C444550FFB84B316"
   },
   "d1_databases": [
     {

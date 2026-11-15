@@ -1784,6 +1784,10 @@ var index_default = {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/appcast.xml") return appcastResponse(request);
+      if (url.pathname === "/app" || url.pathname === "/app/" || url.pathname === "/download/app" || url.pathname === "/api/app/download" || url.pathname === "/api/app/latest.apk") {
+        const apkUrl = env.APP_UPDATE_APK_URL || "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk";
+        return Response.redirect(apkUrl, 302);
+      }
       const paymentPath = url.pathname.replace(/\/+$/, "") || "/";
       if (paymentPath === "/api/app/payment/notify") return appPaymentCallback(request, env);
       if (paymentPath === "/api/app/payment/return") return appPaymentReturn(request, env);
