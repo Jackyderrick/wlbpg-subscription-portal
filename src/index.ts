@@ -194,7 +194,7 @@ function renderDetail(){
   '<div class="facts"><div class="fact"><span>\u8D26\u53F7\u72B6\u6001</span><span class="badge '+(disabled?'disabled':'')+'">'+(disabled?'\u5DF2\u505C\u7528':'\u5DF2\u542F\u7528')+'</span></div>'+
   '<div class="fact"><span>\u8BA2\u9605\u72B6\u6001</span>'+badge(u)+'</div><div class="fact"><span>\u5230\u671F\u65F6\u95F4</span><span>'+fmt(u.expires_at)+'</span></div>'+
   '<div class="fact"><span>\u90AE\u7BB1</span><span class="email-value"><span>'+esc(p.email||'\u672A\u586B\u5199')+'</span><button class="link" data-edit="'+u.id+'">\u7F16\u8F91</button></span></div>'+
-  '<div class="fact"><span>\u8BBE\u5907</span><span class="email-value"><span>'+Number(summary.device_count??detail.devices.length)+'</span><button class="link" id="viewDevices">\u67E5\u770B\u8BBE\u5907</button></span></div>'+
+  '<div class="fact"><span>\u8BBE\u5907 / \u4E0A\u9650</span><span class="email-value"><span>'+Number(summary.device_count??detail.devices.length)+' / '+(u.device_limit||2)+'</span><button class="link" id="viewDevices">\u67E5\u770B\u8BBE\u5907</button></span></div>'+
   '<div class="fact"><span>\u8BA2\u5355</span><span>'+Number(summary.order_count??detail.orders.length)+'</span></div>'+
   '<div class="fact"><span>DNS\u8BB0\u5F55</span><span class="email-value"><span>'+Number(u.dns_count||0)+' / '+Number(u.node_limit)+'</span><button class="link" id="manageDns">\u7BA1\u7406</button></span></div></div>'+
   '<section class="renew-section"><h3>\u7EED\u671F</h3><div class="segments">'+[1,7,30,0].map(n=>'<button data-days="'+n+'" class="'+(n===days?'active':'')+'">'+(n?n+'\u5929':'\u81EA\u5B9A\u4E49')+'</button>').join('')+'</div>'+
@@ -205,15 +205,15 @@ function renderDetail(){
   '<details class="extra-details"><summary>\u8BBE\u5907\u3001\u8BA2\u5355\u4E0E\u8282\u70B9\u660E\u7EC6</summary><p class="muted">\u8282\u70B9\u989D\u5EA6\uFF1A'+Number(u.node_limit)+'</p><div class="detail-tabs">'+['devices','orders','dns'].map((v,i)=>'<button data-detail-tab="'+v+'" class="'+(detailTab===v?'primary':'')+'">'+['\u8BBE\u5907','\u8BA2\u5355','DNS'][i]+'</button>').join('')+'</div><div class="detail-list" id="detailItems"></div></details>';
   renderDetailItems();preview();
 }
-function renderDetailItems(){const rows=detailTab==='devices'?detail.devices:detailTab==='orders'?detail.orders:detail.dnsRecords;$('#detailItems').innerHTML=rows.map(r=>'<div class="detail-item">'+(detailTab==='devices'?'<strong>'+esc(r.model||r.platform||'\u672A\u77E5\u8BBE\u5907')+'</strong><p>\u8BBE\u5907 ID\uFF1A#'+esc(r.id)+'</p><p class="muted">\u6700\u8FD1\u5728\u7EBF '+fmt(r.last_seen_at)+'</p>':detailTab==='orders'?'<strong>'+esc(r.order_no)+'</strong><p>'+esc(r.plan_id)+' \xB7 '+esc(orderStatus(r.status))+' \xB7 '+(r.amount_cents/100).toFixed(2)+' '+esc(r.currency)+'</p>':'<strong>'+esc(r.hostname)+'</strong><p>'+esc(r.node_name)+' \xB7 '+esc(r.status)+'</p>')+'</div>').join('')||'<p class="muted">\u6682\u65E0\u8BB0\u5F55</p>'}
+function renderDetailItems(){const rows=detailTab==='devices'?detail.devices:detailTab==='orders'?detail.orders:detail.dnsRecords;$('#detailItems').innerHTML=rows.map(r=>'<div class="detail-item">'+(detailTab==='devices'?'<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><strong>'+esc(r.model||r.platform||'\u672A\u77E5\u8BBE\u5907')+'</strong><p>\u8BBE\u5907 ID\uFF1A#'+esc(r.id)+' \xB7 '+esc(r.platform||'')+'</p><p class="muted">\u6700\u8FD1\u5728\u7EBF '+fmt(r.last_seen_at)+'</p></div><button class="link danger" data-kick-device="'+r.id+'">\u8E22\u4E0B\u7EBF</button></div>':detailTab==='orders'?'<strong>'+esc(r.order_no)+'</strong><p>'+esc(r.plan_id)+' \xB7 '+esc(orderStatus(r.status))+' \xB7 '+(r.amount_cents/100).toFixed(2)+' '+esc(r.currency)+'</p>':'<strong>'+esc(r.hostname)+'</strong><p>'+esc(r.node_name)+' \xB7 '+esc(r.status)+'</p>')+'</div>').join('')||'<p class="muted">\u6682\u65E0\u8BB0\u5F55</p>'}
 function expiry(){const count=days||Number($('#dayCount')?.value);if(!Number.isInteger(count)||count<1||count>3650)throw new Error('\u7EED\u671F\u5929\u6570\u5FC5\u987B\u4E3A 1 \u5230 3650 \u7684\u6574\u6570');return new Date(Math.max(now(),Date.parse(stamp(detail.user.expires_at)))+count*86400000).toISOString()}
 function preview(){try{$('#renewPreview').textContent=fmt(expiry())}catch{$('#renewPreview').textContent='\u8BF7\u8F93\u5165\u6709\u6548\u5929\u6570'}}
 const orderStatus=s=>({paid:'\u5DF2\u652F\u4ED8',pending:'\u5F85\u652F\u4ED8',created:'\u5F85\u652F\u4ED8',cancelled:'\u5DF2\u53D6\u6D88',failed:'\u5931\u8D25',expired:'\u5DF2\u8FC7\u671F'}[s]||s);
 async function loadOrders(){const d=await call('/api/admin/orders?page='+orderPage);$('#orderRows').innerHTML=d.orders.map(o=>'<tr><td>'+esc(o.order_no)+'</td><td>'+esc(o.user_name)+' <button class="link" data-order-user="'+o.user_id+'">#'+o.user_id+'</button></td><td>'+esc(o.plan_id)+'</td><td>'+(o.amount_cents/100).toFixed(2)+' '+esc(o.currency)+'</td><td>'+esc(orderStatus(o.status))+'</td><td class="date-cell">'+fmt(o.created_at)+'</td></tr>').join('')||'<tr><td colspan="6" class="empty">\u6682\u65E0\u8BA2\u5355</td></tr>';$('#orderPage').textContent='\u7B2C '+orderPage+' \u9875';$('#prevOrders').disabled=orderPage===1;$('#nextOrders').disabled=!d.hasMore}
 async function setView(next){view=next;closeDetail();document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));['users','upstreams','orders','settings'].forEach(v=>$('#'+v+'View').hidden=v!==view);const titles={users:['\u7528\u6237\u7BA1\u7406','\u7BA1\u7406\u7528\u6237\u3001\u6709\u6548\u671F\u4E0E\u5206\u4EAB\u6743\u9650'],upstreams:['\u4E0A\u6E38\u8BA2\u9605','\u8BA2\u9605\u6765\u6E90\u4E0E\u8282\u70B9\u540C\u6B65'],orders:['\u8BA2\u5355\u8BB0\u5F55','\u652F\u4ED8\u8BA2\u5355\u4E0E\u4F1A\u5458\u5957\u9910'],settings:['\u7CFB\u7EDF\u8BBE\u7F6E','\u5F53\u524D\u670D\u52A1\u4E0E\u7BA1\u7406\u5458\u4F1A\u8BDD']};$('#pageTitle').textContent=titles[view][0];$('#pageSubtitle').textContent=titles[view][1];$('#newButton').hidden=!['users','upstreams'].includes(view);$('#newButton span').textContent=view==='upstreams'?'\u6DFB\u52A0\u4E0A\u6E38':'\u65B0\u5EFA\u7528\u6237';if(view==='orders')await loadOrders()}
 function field(label,name,value='',type='text',required=false){return '<label>'+label+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(required?'required':'')+'></label>'}
-function showEditor(mode){editorMode=mode;$('#formError').hidden=true;$('#createdLink').hidden=true;$('#editorForm').hidden=false;$('#editorTitle').textContent=mode==='user'?'\u65B0\u5EFA\u7528\u6237':mode==='upstream'?'\u6DFB\u52A0\u4E0A\u6E38':'\u7F16\u8F91\u7528\u6237';let html='';if(mode==='user'){html=field('\u7528\u6237\u540D','name','','text',true)+'<label>\u4E0A\u6E38<select name="upstreamId" required>'+data.upstreams.map(u=>'<option value="'+u.id+'">'+esc(u.name)+'</option>').join('')+'</select></label>'+field('\u6709\u6548\u671F\u81F3\uFF08\u672C\u5730\u65F6\u95F4\uFF09','expiresAt','','datetime-local',true)+'<label>\u8282\u70B9\u989D\u5EA6<input name="nodeLimit" type="number" min="1" max="20" value="5" required></label>'}else if(mode==='upstream'){html=field('\u540D\u79F0','name','','text',true)+'<label class="full">\u8BA2\u9605\u5730\u5740 \u6216 \u8282\u70B9\u94FE\u63A5 (vless / trojan / vmess / ss)<textarea name="subscriptionUrl" rows="4" placeholder="\u652F\u6301\u8F93\u5165 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u8282\u70B9\u94FE\u63A5 (vless/trojan/vmess/ss\uFF0C\u652F\u6301 Base64)" required style="margin-top:7px;width:100%"></textarea></label>'}else{const u=detail.user,p=detail.profile;html=field('\u7528\u6237\u540D','name',u.name,'text',true)+field('\u90AE\u7BB1','email',p.email||'','email')+field('\u624B\u673A\u53F7','phone',p.phone||'')+field('\u6635\u79F0','nickname',p.nickname||'')+'<label class="full">\u5907\u6CE8<textarea name="remark" rows="3">'+esc(p.remark||'')+'</textarea></label>'}$('#editorFields').innerHTML=html;$('#editor').showModal()}
-async function saveEditor(e){e.preventDefault();if(busy)return;busy=true;$('#saveEditor').disabled=true;try{const f=Object.fromEntries(new FormData(e.target));if(editorMode==='user'){const d=await call('/api/users',{method:'POST',body:JSON.stringify({...f,upstreamId:Number(f.upstreamId),nodeLimit:Number(f.nodeLimit),expiresAt:new Date(f.expiresAt).toISOString()})});await load();$('#editorForm').hidden=true;$('#createdLink').hidden=false;$('#createdLink').textContent='\u8BA2\u9605\u5730\u5740\uFF08\u4EC5\u663E\u793A\u672C\u6B21\uFF09\uFF1A'+d.subscriptionUrl}else if(editorMode==='upstream'){const raw=f.subscriptionUrl.trim();if(!raw)throw new Error('\u8BF7\u8F93\u5165\u8BA2\u9605\u5730\u5740\u6216\u8282\u70B9\u94FE\u63A5');const isHttp=raw.startsWith('http://')||raw.startsWith('https://'),isNode=['vless://','vmess://','trojan://','ss://'].some(p=>raw.includes(p));if(!isHttp&&!isNode&&raw.length<20)throw new Error('\u8BF7\u8F93\u5165\u6709\u6548\u7684 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u4EE5 vless/vmess/trojan/ss \u5F00\u5934\u7684\u8282\u70B9\u94FE\u63A5');const res=await call('/api/upstreams',{method:'POST',body:JSON.stringify({name:f.name.trim(),subscriptionUrl:raw})});await load();$('#editor').close();if(res.importedNodes){notify('\u5DF2\u76F4\u63A5\u5F55\u5165 '+res.importedNodes+' \u4E2A\u8282\u70B9');return}}else{const id=selected;await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({name:f.name,profile:{email:f.email,phone:f.phone,nickname:f.nickname,remark:f.remark}})});await load();await openUser(id);$('#editor').close()}notify('\u4FDD\u5B58\u6210\u529F')}catch(err){$('#formError').textContent=err.message;$('#formError').hidden=false}finally{busy=false;$('#saveEditor').disabled=false}}
+function showEditor(mode){editorMode=mode;$('#formError').hidden=true;$('#createdLink').hidden=true;$('#editorForm').hidden=false;$('#editorTitle').textContent=mode==='user'?'\u65B0\u5EFA\u7528\u6237':mode==='upstream'?'\u6DFB\u52A0\u4E0A\u6E38':'\u7F16\u8F91\u7528\u6237';let html='';if(mode==='user'){html=field('\u7528\u6237\u540D','name','','text',true)+'<label>\u4E0A\u6E38<select name="upstreamId" required>'+data.upstreams.map(u=>'<option value="'+u.id+'">'+esc(u.name)+'</option>').join('')+'</select></label>'+field('\u6709\u6548\u671F\u81F3\uFF08\u672C\u5730\u65F6\u95F4\uFF09','expiresAt','','datetime-local',true)+'<label>\u8282\u70B9\u989D\u5EA6<input name="nodeLimit" type="number" min="1" max="20" value="5" required></label><label>\u8BBE\u5907\u6570\u91CF\u4E0A\u9650<input name="deviceLimit" type="number" min="1" max="50" value="2" required></label>'}else if(mode==='upstream'){html=field('\u540D\u79F0','name','','text',true)+'<label class="full">\u8BA2\u9605\u5730\u5740 \u6216 \u8282\u70B9\u94FE\u63A5 (vless / trojan / vmess / ss)<textarea name="subscriptionUrl" rows="4" placeholder="\u652F\u6301\u8F93\u5165 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u8282\u70B9\u94FE\u63A5 (vless/trojan/vmess/ss\uFF0C\u652F\u6301 Base64)" required style="margin-top:7px;width:100%"></textarea></label>'}else{const u=detail.user,p=detail.profile;html=field('\u7528\u6237\u540D','name',u.name,'text',true)+field('\u90AE\u7BB1','email',p.email||'','email')+field('\u624B\u673A\u53F7','phone',p.phone||'')+field('\u6635\u79F0','nickname',p.nickname||'')+'<label>\u8BBE\u5907\u6570\u91CF\u4E0A\u9650<input name="deviceLimit" type="number" min="1" max="50" step="1" value="'+(u.device_limit||2)+'" required></label><label class="full">\u5907\u6CE8<textarea name="remark" rows="3">'+esc(p.remark||'')+'</textarea></label>'}$('#editorFields').innerHTML=html;$('#editor').showModal()}
+async function saveEditor(e){e.preventDefault();if(busy)return;busy=true;$('#saveEditor').disabled=true;try{const f=Object.fromEntries(new FormData(e.target));if(editorMode==='user'){const d=await call('/api/users',{method:'POST',body:JSON.stringify({...f,upstreamId:Number(f.upstreamId),nodeLimit:Number(f.nodeLimit),deviceLimit:Number(f.deviceLimit||2),expiresAt:new Date(f.expiresAt).toISOString()})});await load();$('#editorForm').hidden=true;$('#createdLink').hidden=false;$('#createdLink').textContent='\u8BA2\u9605\u5730\u5740\uFF08\u4EC5\u663E\u793A\u672C\u6B21\uFF09\uFF1A'+d.subscriptionUrl}else if(editorMode==='upstream'){const raw=f.subscriptionUrl.trim();if(!raw)throw new Error('\u8BF7\u8F93\u5165\u8BA2\u9605\u5730\u5740\u6216\u8282\u70B9\u94FE\u63A5');const isHttp=raw.startsWith('http://')||raw.startsWith('https://'),isNode=['vless://','vmess://','trojan://','ss://'].some(p=>raw.includes(p));if(!isHttp&&!isNode&&raw.length<20)throw new Error('\u8BF7\u8F93\u5165\u6709\u6548\u7684 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u4EE5 vless/vmess/trojan/ss \u5F00\u5934\u7684\u8282\u70B9\u94FE\u63A5');const res=await call('/api/upstreams',{method:'POST',body:JSON.stringify({name:f.name.trim(),subscriptionUrl:raw})});await load();$('#editor').close();if(res.importedNodes){notify('\u5DF2\u76F4\u63A5\u5F55\u5165 '+res.importedNodes+' \u4E2A\u8282\u70B9');return}}else{const id=selected;await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({name:f.name,deviceLimit:Number(f.deviceLimit||2),profile:{email:f.email,phone:f.phone,nickname:f.nickname,remark:f.remark}})});await load();await openUser(id);$('#editor').close()}notify('\u4FDD\u5B58\u6210\u529F')}catch(err){$('#formError').textContent=err.message;$('#formError').hidden=false}finally{busy=false;$('#saveEditor').disabled=false}}
 function showDnsEditor(){
   $('#dnsUser').textContent=detail.user.name+' (#'+detail.user.id+')';
   $('#dnsCounts').textContent=Number(detail.user.dns_count||0)+' / '+detail.user.node_limit;
@@ -251,7 +251,19 @@ $('#closeDns').onclick=()=>{if(!busy)$('#dnsEditor').close()};
 $('#dnsEditor').oncancel=e=>{if(busy)e.preventDefault()};
 $('#dnsForm').onsubmit=e=>{e.preventDefault();manageDns(true)};$('#fillDns').onclick=()=>manageDns(false);
 $('#detail').addEventListener('click',e=>{if(e.target.closest('#manageDns')&&!busy)showDnsEditor()});
-$('#detail').addEventListener('click',e=>{
+$('#detail').addEventListener('click',async e=>{
+  const kickBtn=e.target.closest('[data-kick-device]');
+  if(kickBtn&&!busy){
+    const devId=kickBtn.dataset.kickDevice;
+    if(!await askConfirmation('\u786E\u8BA4\u8981\u5C06\u8BE5\u8BBE\u5907\u8E22\u4E0B\u7EBF\u5417\uFF1F\u8BE5\u8BBE\u5907\u5C06\u9000\u51FA\u767B\u5F55\u5E76\u89E3\u9664\u7ED1\u5B9A\u3002'))return;
+    action(async()=>{
+      await call('/api/users/'+selected+'/devices/'+devId+'/kick',{method:'POST'});
+      await load();
+      await openUser(selected);
+      notify('\u8BBE\u5907\u5DF2\u8E22\u4E0B\u7EBF');
+    },kickBtn);
+    return;
+  }
   if(!e.target.closest('#viewDevices')||busy)return;
   detailTab='devices';
   const records=$('#detail .extra-details');records.open=true;
@@ -996,7 +1008,7 @@ __name(effectiveMembership, "effectiveMembership");
 __name2(effectiveMembership, "effectiveMembership");
 __name22(effectiveMembership, "effectiveMembership");
 async function appUserPayload(request, env, userId, deviceId) {
-  const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(userId).first();
+  const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,device_limit,dns_revision FROM users WHERE id=?").bind(userId).first();
   if (!user) return { error: "user_not_found" };
   if (user.status === "active" && Date.parse(user.expires_at || "") <= Date.now()) {
     await deprovisionUser(env, user.id);
@@ -1200,6 +1212,7 @@ async function appApi(request, env, url) {
       const result = await env.DB.prepare("INSERT INTO app_devices(user_id,device_uuid_hash,subscription_token,platform,app_version,model) VALUES(?,?,?,?,?,?)").bind(row.user_id, deviceHash, subscriptionToken, String(input.platform || "android"), String(input.app_version || ""), String(input.device_model || "")).run();
       device = { id: Number(result.meta.last_row_id), user_id: row.user_id, subscription_token: subscriptionToken };
     }
+    await enforceDeviceLimit(env, row.user_id, device.id);
     await env.DB.prepare("UPDATE app_email_codes SET consumed_at=CURRENT_TIMESTAMP WHERE id=?").bind(row.id).run();
     const accessToken = randomToken();
     const sessionExpiresAt = new Date(Date.now() + 30 * 864e5).toISOString();
@@ -1220,7 +1233,7 @@ async function appApi(request, env, url) {
       if (!upstream) return json({ error: "no_upstream_available" }, 503);
       const subscriptionToken = randomToken();
       const expiresAt = new Date(Date.now() + 3 * 864e5).toISOString();
-      const userResult = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit) VALUES(?,?,?,?,?,?)").bind(`${guestPrefix} ${subscriptionToken.slice(0, 6)}`, await hash(subscriptionToken), subscriptionToken.slice(0, 8), upstream.id, expiresAt, 5).run();
+      const userResult = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit,device_limit) VALUES(?,?,?,?,?,?,2)").bind(`${guestPrefix} ${subscriptionToken.slice(0, 6)}`, await hash(subscriptionToken), subscriptionToken.slice(0, 8), upstream.id, expiresAt, 5).run();
       const userId = Number(userResult.meta.last_row_id);
       const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(userId).first();
       if (user) await provisionUser(env, user);
@@ -1431,8 +1444,31 @@ async function appPaymentCallback(request, env) {
 __name(appPaymentCallback, "appPaymentCallback");
 __name2(appPaymentCallback, "appPaymentCallback");
 __name22(appPaymentCallback, "appPaymentCallback");
+
+async function enforceDeviceLimit(env, userId, currentDeviceId = null) {
+  const user = await env.DB.prepare("SELECT id, device_limit FROM users WHERE id=?").bind(userId).first();
+  const limit = Math.max(1, Number(user?.device_limit ?? 2));
+  const rows = await env.DB.prepare("SELECT id, last_seen_at FROM app_devices WHERE user_id=? ORDER BY last_seen_at ASC, id ASC").bind(userId).all();
+  const allDevices = rows.results || [];
+  if (allDevices.length > limit) {
+    const candidateDevices = currentDeviceId ? allDevices.filter(d => d.id !== currentDeviceId) : allDevices;
+    const toEvictCount = allDevices.length - limit;
+    const toEvict = candidateDevices.slice(0, toEvictCount);
+    for (const dev of toEvict) {
+      try {
+        await env.DB.prepare("UPDATE app_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE device_id=? AND revoked_at IS NULL").bind(dev.id).run();
+        await env.DB.prepare("DELETE FROM app_sessions WHERE device_id=?").bind(dev.id).run();
+        await env.DB.prepare("DELETE FROM app_devices WHERE id=?").bind(dev.id).run();
+      } catch (err) {
+        console.error("enforceDeviceLimit error:", err);
+      }
+    }
+  }
+}
+__name(enforceDeviceLimit, "enforceDeviceLimit");
+
 async function adminUserDetail(env, userId) {
-  const user = await env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,u.dns_revision,u.token_hint,u.created_at,
+  const user = await env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,COALESCE(u.device_limit, 2) device_limit,u.dns_revision,u.token_hint,u.created_at,
       p.email,p.phone,p.nickname,p.remark,p.updated_at profile_updated_at,
       (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='active') dns_count
     FROM users u LEFT JOIN app_user_profiles p ON p.user_id=u.id
@@ -1473,9 +1509,13 @@ async function adminUpdateUser(request, env, userId) {
   if (!name) return json({ error: "\u7528\u6237\u540D\u4E0D\u80FD\u4E3A\u7A7A" }, 400);
   if (Number.isNaN(Date.parse(expiresAt))) return json({ error: "\u5230\u671F\u65F6\u95F4\u65E0\u6548" }, 400);
   const nodeLimit = input.nodeLimit == null ? existing.node_limit : Math.max(1, Math.min(20, Number(input.nodeLimit || existing.node_limit)));
+  const deviceLimit = input.deviceLimit == null ? (existing.device_limit ?? 2) : Math.max(1, Math.min(50, Number(input.deviceLimit || existing.device_limit || 2)));
   const status = input.status == null ? existing.status : String(input.status);
   if (!["active", "disabled", "expired"].includes(status)) return json({ error: "\u72B6\u6001\u65E0\u6548" }, 400);
-  await env.DB.prepare("UPDATE users SET name=?,expires_at=?,node_limit=?,status=? WHERE id=?").bind(name, expiresAt, nodeLimit, status, userId).run();
+  await env.DB.prepare("UPDATE users SET name=?,expires_at=?,node_limit=?,device_limit=?,status=? WHERE id=?").bind(name, expiresAt, nodeLimit, deviceLimit, status, userId).run();
+  if (deviceLimit < (existing.device_limit ?? 2)) {
+    await enforceDeviceLimit(env, userId);
+  }
   if (input.profile && typeof input.profile === "object") {
     const profile = await upsertUserProfile(env, userId, input.profile);
     if (profile.error) return json({ error: profile.error }, 400);
@@ -1556,7 +1596,7 @@ async function api(request, env, url) {
     await expireUsers(env);
     const [upstreams, users] = await Promise.all([
       env.DB.prepare("SELECT id,name,enabled,last_synced_at,last_error,(SELECT COUNT(*) FROM nodes WHERE upstream_id=upstreams.id AND active=1) node_count FROM upstreams ORDER BY id DESC").all(),
-      env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,u.token_hint,u.created_at,
+      env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,COALESCE(u.device_limit, 2) device_limit,u.token_hint,u.created_at,
         p.email,p.phone,p.nickname,p.remark,
         CASE WHEN u.status='active' AND strftime('%s',u.expires_at)>strftime('%s','now') THEN strftime('%s',u.expires_at)-strftime('%s','now') ELSE 0 END remaining_seconds,
         (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='active') dns_count,
@@ -1569,6 +1609,17 @@ async function api(request, env, url) {
         ORDER BY u.id DESC LIMIT 500`).all()
     ]);
     return json({ upstreams: upstreams.results, users: users.results, dnsSuffix: env.DNS_SUFFIX });
+  }
+  const kickDeviceMatch = url.pathname.match(/^\/api\/users\/(\d+)\/devices\/(\d+)\/kick$/);
+  if (request.method === "POST" && kickDeviceMatch) {
+    const userId = Number(kickDeviceMatch[1]);
+    const deviceId = Number(kickDeviceMatch[2]);
+    const dev = await env.DB.prepare("SELECT id FROM app_devices WHERE id=? AND user_id=?").bind(deviceId, userId).first();
+    if (!dev) return json({ error: "\u8BBE\u5907\u4E0D\u5B58\u5728\u6216\u4E0D\u5C5E\u4E8E\u8BE5\u7528\u6237" }, 404);
+    await env.DB.prepare("UPDATE app_sessions SET revoked_at=CURRENT_TIMESTAMP WHERE device_id=? AND revoked_at IS NULL").bind(deviceId).run();
+    await env.DB.prepare("DELETE FROM app_sessions WHERE device_id=?").bind(deviceId).run();
+    await env.DB.prepare("DELETE FROM app_devices WHERE id=?").bind(deviceId).run();
+    return json({ ok: true });
   }
   const dnsManageMatch = url.pathname.match(/^\/api\/users\/(\d+)\/dns$/);
   if (request.method === "POST" && dnsManageMatch) return adminManageDns(request, env, Number(dnsManageMatch[1]));
@@ -1632,7 +1683,8 @@ async function api(request, env, url) {
     if (!input.name || !input.upstreamId || !input.expiresAt || Number.isNaN(Date.parse(input.expiresAt))) return json({ error: "\u7528\u6237\u3001\u4E0A\u6E38\u548C\u5230\u671F\u65F6\u95F4\u5FC5\u586B" }, 400);
     const token = randomToken();
     const nodeLimit = Math.max(1, Math.min(20, Number(input.nodeLimit || 5)));
-    const result = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit) VALUES(?,?,?,?,?,?)").bind(input.name.trim(), await hash(token), token.slice(0, 6), input.upstreamId, new Date(input.expiresAt).toISOString(), nodeLimit).run();
+    const deviceLimit = Math.max(1, Math.min(50, Number(input.deviceLimit || 2)));
+    const result = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit,device_limit) VALUES(?,?,?,?,?,?,?)").bind(input.name.trim(), await hash(token), token.slice(0, 6), input.upstreamId, new Date(input.expiresAt).toISOString(), nodeLimit, deviceLimit).run();
     const userId = Number(result.meta.last_row_id);
     const selectedNodeIds = Array.from(new Set((input.selectedNodeIds || []).map(Number).filter(Number.isInteger))).slice(0, nodeLimit);
     for (const nodeId of selectedNodeIds) {
