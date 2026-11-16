@@ -1817,16 +1817,30 @@ function buildAppcastXml(releases) {
   return '<?xml version="1.0" encoding="utf-8"?>\n<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" xmlns:dc="http://purl.org/dc/elements/1.1/">\n<channel><title>' + APPCAST_TITLE + "</title><link>https://app.5858188.xyz/appcast.xml</link><description>Desktop updates</description><language>zh-cn</language>" + items.join("") + "</channel></rss>\n";
 }
 __name(buildAppcastXml, "buildAppcastXml");
-async function appcastResponse(request) {
+async function appcastResponse(request, env) {
   if (request.method !== "GET" && request.method !== "HEAD") {
     return new Response("Method Not Allowed", { status: 405, headers: { allow: "GET, HEAD" } });
   }
-  var body2 = buildAppcastXml(DESKTOP_RELEASES);
+  var version = env?.APP_UPDATE_WINDOWS_VERSION || "4.3.0";
+  var notes = env?.APP_UPDATE_WINDOWS_NOTES || "【新版本体验】外贸加速器 v4.3.0 正式发布！新增左侧独立设置中心，优化分流与节点稳定性。";
+  var url = env?.APP_UPDATE_WINDOWS_URL || "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/desktop/%E5%A4%96%E8%B4%B8%E5%8A%A0%E9%80%9F%E5%99%A8.exe";
+  var releases = [
+    {
+      platform: "windows",
+      version: version,
+      build: 40300,
+      url: url,
+      size: 48795538,
+      notes: notes,
+      published_at: (/* @__PURE__ */ new Date()).toISOString()
+    }
+  ];
+  var body2 = buildAppcastXml(releases);
   var digest = await crypto.subtle.digest("SHA-1", new TextEncoder().encode(body2));
   var etag = '"' + Array.from(new Uint8Array(digest)).map(function(b) {
     return b.toString(16).padStart(2, "0");
   }).join("") + '"';
-  var headers = new Headers({ "content-type": "application/xml; charset=utf-8", "cache-control": "public, max-age=300", "x-content-type-options": "nosniff", "etag": etag });
+  var headers = new Headers({ "content-type": "application/xml; charset=utf-8", "cache-control": "no-cache", "x-content-type-options": "nosniff", "etag": etag });
   if (request.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers });
   return new Response(request.method === "HEAD" ? null : body2, { headers });
 }
@@ -1835,7 +1849,7 @@ var index_default = {
   async fetch(request, env) {
     try {
       const url = new URL(request.url);
-      if (url.pathname === "/appcast.xml") return appcastResponse(request);
+      if (url.pathname === "/appcast.xml") return appcastResponse(request, env);
       if (url.pathname === "/app" || url.pathname === "/app/" || url.pathname === "/download/app" || url.pathname === "/api/app/download" || url.pathname === "/api/app/latest.apk") {
         const apkUrl = env.APP_UPDATE_APK_URL || "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk";
         return Response.redirect(apkUrl, 302);
