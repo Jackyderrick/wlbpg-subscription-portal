@@ -166,25 +166,39 @@ aside{min-width:0;border-left:1px solid #e1e4eb;background:#fff;padding:20px}.as
 var icon = /* @__PURE__ */ __name2((nodes) => '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + nodes[2].map(([tag, attrs]) => "<" + tag + " " + Object.entries(attrs).map(([key, value]) => key + '="' + value + '"').join(" ") + "></" + tag + ">").join("") + "</svg>", "icon");
 var icons = Object.fromEntries(Object.entries({ Users, Layers, Receipt, Settings, Plus, Search, X, RefreshCw, LogOut, Ban, Pencil, MoreHorizontal: Ellipsis, Info }).map(([key, value]) => [key, icon(value)]));
 var _a;
-var admin_page_default = String.raw(_a || (_a = __template(['<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>\u8BA2\u9605\u7BA1\u7406\u5DE5\u4F5C\u53F0</title>\n<style>', '</style></head><body>\n<header><div class="brand"><span class="brandmark">', '</span>\u9AD8\u6548\u7BA1\u7406\u5DE5\u4F5C\u53F0</div><div class="header-right"><time id="clock" class="muted"></time></div></header>\n<form id="login" class="login"><h1>\u7BA1\u7406\u5458\u767B\u5F55</h1><label>\u7BA1\u7406\u5458\u5BC6\u94A5<input id="secret" type="password" required autocomplete="current-password"></label><button class="primary">\u8FDB\u5165\u540E\u53F0</button><p id="loginError" class="error" hidden></p></form>\n<div id="app" class="shell" hidden><nav aria-label="\u7BA1\u7406\u5BFC\u822A"><h2>\u8BA2\u9605\u7BA1\u7406</h2><button data-view="users" class="active">', '\u7528\u6237\u7BA1\u7406</button><button data-view="upstreams">', '\u4E0A\u6E38\u8BA2\u9605</button><button data-view="orders">', '\u8BA2\u5355\u8BB0\u5F55</button><button data-view="settings">', '\u7CFB\u7EDF\u8BBE\u7F6E</button><div class="nav-tools"><button class="icon" id="refresh" title="\u5237\u65B0\u6570\u636E" aria-label="\u5237\u65B0\u6570\u636E">', '</button><button class="icon" id="logout" title="\u9000\u51FA\u767B\u5F55" aria-label="\u9000\u51FA\u767B\u5F55">', '</button></div></nav>\n<div class="workspace" id="workspace"><main class="content"><div class="page-heading"><div><h1 id="pageTitle">\u7528\u6237\u7BA1\u7406</h1><p id="pageSubtitle">\u7BA1\u7406\u7528\u6237\u3001\u6709\u6548\u671F\u4E0E\u5206\u4EAB\u6743\u9650</p></div><button id="newButton" class="primary">', '<span>\u65B0\u5EFA\u7528\u6237</span></button></div>\n<section id="usersView"><div class="toolbar"><label class="search" aria-label="\u641C\u7D22\u7528\u6237">', '<input id="search" type="search" placeholder="\u641C\u7D22\u7528\u6237\u540D\u3001\u90AE\u7BB1\u6216 ID\uFF08\u5982 #26\uFF09"></label><div class="filters" id="filters"><button data-filter="all" class="active">\u5168\u90E8</button><button data-filter="soon">\u5373\u5C06\u5230\u671F</button><button data-filter="expired">\u5DF2\u5230\u671F</button><button data-filter="disabled">\u5DF2\u505C\u7528</button></div></div><div class="table-wrap"><table><thead><tr><th class="selection-cell"><span class="sr-only">\u9009\u62E9\u7528\u6237</span></th><th>\u7528\u6237</th><th>\u6709\u6548\u72B6\u6001</th><th>\u5230\u671F\u65F6\u95F4</th><th>\u8BBE\u5907</th><th>\u64CD\u4F5C</th></tr></thead><tbody id="userRows"></tbody></table></div><div class="footer"><span id="userCount"></span><div class="pager"><button id="prevUsers">\u4E0A\u4E00\u9875</button><span id="userPage"></span><button id="nextUsers">\u4E0B\u4E00\u9875</button></div></div></section>\n<section id="upstreamsView" hidden><div class="table-wrap"><table><thead><tr><th>\u540D\u79F0</th><th>\u8282\u70B9</th><th>\u6700\u8FD1\u540C\u6B65</th><th>\u72B6\u6001</th><th>\u64CD\u4F5C</th></tr></thead><tbody id="upRows"></tbody></table></div></section>\n<section id="ordersView" hidden><div class="table-wrap"><table><thead><tr><th>\u8BA2\u5355\u53F7</th><th>\u7528\u6237</th><th>\u5957\u9910</th><th>\u91D1\u989D</th><th>\u72B6\u6001</th><th>\u521B\u5EFA\u65F6\u95F4</th></tr></thead><tbody id="orderRows"></tbody></table></div><div class="footer"><span id="orderPage"></span><div class="pager"><button id="prevOrders">\u4E0A\u4E00\u9875</button><button id="nextOrders">\u4E0B\u4E00\u9875</button></div></div></section>\n<section id="settingsView" class="settings" hidden><div class="fact"><span>App Base URL</span><span id="baseUrl"></span></div><div class="fact"><span>\u65F6\u95F4\u663E\u793A</span><span>Asia/Shanghai\uFF08UTC+8\uFF09</span></div><div class="fact"><span>\u7528\u6237\u5217\u8868\u8303\u56F4</span><span>\u6700\u8FD1 500 \u4F4D\u7528\u6237</span></div><div class="fact"><span>\u4E0A\u6E38\u6570\u91CF</span><span id="upCount"></span></div><div class="section-end"><button id="settingsLogout">', '\u9000\u51FA\u767B\u5F55</button></div></section>\n</main><aside id="detail" hidden aria-label="\u7528\u6237\u8BE6\u60C5"></aside></div></div>\n<dialog id="editor" aria-labelledby="editorTitle"><div class="dialog-heading"><h2 id="editorTitle"></h2><button class="icon" id="closeEditor" aria-label="\u5173\u95ED">', '</button></div><form id="editorForm"><div id="editorFields" class="form-grid"></div><div class="dialog-actions"><button type="button" id="cancelEditor">\u53D6\u6D88</button><button class="primary" id="saveEditor">\u4FDD\u5B58</button></div><p id="formError" class="error" hidden></p></form><p id="createdLink" hidden></p></dialog>\n<dialog id="confirmation" aria-labelledby="confirmationTitle"><h2 id="confirmationTitle">\u786E\u8BA4\u64CD\u4F5C</h2><p id="confirmationText"></p><div class="dialog-actions"><button id="confirmationCancel">\u53D6\u6D88</button><button id="confirmationAccept" class="primary">\u786E\u8BA4\u6267\u884C</button></div></dialog>\n<div id="rowMenu" class="row-menu" role="menu" hidden><button role="menuitem" data-menu-action="detail">\u7528\u6237\u8BE6\u60C5</button><button role="menuitem" data-menu-action="edit">\u7F16\u8F91\u8D44\u6599</button><button role="menuitem" data-menu-action="dns">\u8282\u70B9\u4E0E DNS</button></div>\n<dialog id="dnsEditor" aria-labelledby="dnsTitle"><div class="dialog-heading"><h2 id="dnsTitle">\u8282\u70B9\u4E0E DNS</h2><button class="icon" id="closeDns" aria-label="\u5173\u95ED\u8282\u70B9\u7BA1\u7406">', '</button></div><form id="dnsForm"><div class="fact"><span>\u7528\u6237</span><span id="dnsUser"></span></div><div class="fact"><span>\u6709\u6548 DNS / \u989D\u5EA6</span><span id="dnsCounts"></span></div><label style="margin-top:18px">\u76EE\u6807\u8282\u70B9\u6570\u91CF<input id="dnsLimit" type="number" min="1" max="20" step="1" required></label><div style="margin-top:14px"><label style="font-weight:600">\u6307\u5B9A\u4E13\u5C5E\u8282\u70B9\uFF08\u53EF\u9009\uFF09\uFF1A</label><div id="dnsNodeList" style="max-height:180px;overflow-y:auto;border:1px solid #d6d9e1;border-radius:6px;padding:8px;margin-top:6px;background:#f9fafb;font-size:13px"></div><small class="muted" style="display:block;margin-top:4px">\u52FE\u9009\u540E\u8BE5\u7528\u6237\u4EC5\u4E0B\u53D1\u9009\u4E2D\u7684\u4E13\u5C5E\u8282\u70B9\uFF1B\u82E5\u5168\u4E0D\u52FE\u9009\u5219\u6309\u4E0A\u6E38\u8282\u70B9\u6C60\u81EA\u52A8\u5206\u914D\u3002</small></div><p id="dnsResult" class="dns-result" role="status" hidden></p><p id="dnsError" class="error" hidden></p><div class="dialog-actions"><button type="button" id="fillDns" title="\u6309\u5F53\u524D\u5DF2\u4FDD\u5B58\u989D\u5EA6\u8865\u9F50 DNS">\u8865\u9F50 DNS</button><button class="primary" id="saveDns">\u4FDD\u5B58\u5E76\u5206\u914D</button></div></form></dialog>\n<div id="message" role="status" hidden></div>\n<script>\nconst I=', `;
+var admin_page_default = String.raw(_a || (_a = __template(['<!doctype html>\n<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>\u8BA2\u9605\u7BA1\u7406\u5DE5\u4F5C\u53F0</title>\n<style>', '</style></head><body>\n<header><div class="brand"><span class="brandmark">', '</span>\u9AD8\u6548\u7BA1\u7406\u5DE5\u4F5C\u53F0</div><div class="header-right"><time id="clock" class="muted"></time></div></header>\n<form id="login" class="login"><h1>\u7BA1\u7406\u5458\u767B\u5F55</h1><label>\u7BA1\u7406\u5458\u5BC6\u94A5<input id="secret" type="password" required autocomplete="current-password"></label><button class="primary">\u8FDB\u5165\u540E\u53F0</button><p id="loginError" class="error" hidden></p></form>\n<div id="app" class="shell" hidden><nav aria-label="\u7BA1\u7406\u5BFC\u822A"><h2>\u8BA2\u9605\u7BA1\u7406</h2><button data-view="users" class="active">', '\u7528\u6237\u7BA1\u7406</button><button data-view="plans"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>\u5957\u9910\u7BA1\u7406</button><button data-view="upstreams">', '\u4E0A\u6E38\u8BA2\u9605</button><button data-view="orders">', '\u8BA2\u5355\u8BB0\u5F55</button><button data-view="settings">', '\u7CFB\u7EDF\u8BBE\u7F6E</button><div class="nav-tools"><button class="icon" id="refresh" title="\u5237\u65B0\u6570\u636E" aria-label="\u5237\u65B0\u6570\u636E">', '</button><button class="icon" id="logout" title="\u9000\u51FA\u767B\u5F55" aria-label="\u9000\u51FA\u767B\u5F55">', '</button></div></nav>\n<div class="workspace" id="workspace"><main class="content"><div class="page-heading"><div><h1 id="pageTitle">\u7528\u6237\u7BA1\u7406</h1><p id="pageSubtitle">\u7BA1\u7406\u7528\u6237\u3001\u6709\u6548\u671F\u4E0E\u5206\u4EAB\u6743\u9650</p></div><button id="newButton" class="primary">', '<span>\u65B0\u5EFA\u7528\u6237</span></button></div>\n<section id="usersView"><div class="toolbar"><label class="search" aria-label="\u641C\u7D22\u7528\u6237">', '<input id="search" type="search" placeholder="\u641C\u7D22\u7528\u6237\u540D\u3001\u90AE\u7BB1\u6216 ID\uFF08\u5982 #26\uFF09"></label><div class="filters" id="filters"><button data-filter="all" class="active">\u5168\u90E8</button><button data-filter="soon">\u5373\u5C06\u5230\u671F</button><button data-filter="expired">\u5DF2\u5230\u671F</button><button data-filter="disabled">\u5DF2\u505C\u7528</button></div></div><div class="table-wrap"><table><thead><tr><th class="selection-cell"><span class="sr-only">\u9009\u62E9\u7528\u6237</span></th><th>\u7528\u6237</th><th>\u6709\u6548\u72B6\u6001</th><th>\u5230\u671F\u65F6\u95F4</th><th>\u8BBE\u5907</th><th>\u64CD\u4F5C</th></tr></thead><tbody id="userRows"></tbody></table></div><div class="footer"><span id="userCount"></span><div class="pager"><button id="prevUsers">\u4E0A\u4E00\u9875</button><span id="userPage"></span><button id="nextUsers">\u4E0B\u4E00\u9875</button></div></div></section>\n<section id="plansView" hidden><div class="table-wrap"><table><thead><tr><th>\u5957\u9910\u6863\u4F4D</th><th>\u4EF7\u683C / \u5468\u671F</th><th>\u8282\u70B9\u4E0A\u9650</th><th>\u5DF2\u6307\u5B9A\u4E13\u5C5E\u8282\u70B9</th><th>\u5F53\u524D\u7528\u6237\u6570</th><th>\u64CD\u4F5C</th></tr></thead><tbody id="planRows"></tbody></table></div></section>\n<section id="upstreamsView" hidden><div class="table-wrap"><table><thead><tr><th>\u540D\u79F0</th><th>\u8282\u70B9</th><th>\u6700\u8FD1\u540C\u6B65</th><th>\u72B6\u6001</th><th>\u64CD\u4F5C</th></tr></thead><tbody id="upRows"></tbody></table></div></section>\n<section id="ordersView" hidden><div class="table-wrap"><table><thead><tr><th>\u8BA2\u5355\u53F7</th><th>\u7528\u6237</th><th>\u5957\u9910</th><th>\u91D1\u989D</th><th>\u72B6\u6001</th><th>\u521B\u5EFA\u65F6\u95F4</th></tr></thead><tbody id="orderRows"></tbody></table></div><div class="footer"><span id="orderPage"></span><div class="pager"><button id="prevOrders">\u4E0A\u4E00\u9875</button><button id="nextOrders">\u4E0B\u4E00\u9875</button></div></div></section>\n<section id="settingsView" class="settings" hidden><div class="fact"><span>App Base URL</span><span id="baseUrl"></span></div><div class="fact"><span>\u65F6\u95F4\u663E\u793A</span><span>Asia/Shanghai\uFF08UTC+8\uFF09</span></div><div class="fact"><span>\u7528\u6237\u5217\u8868\u8303\u56F4</span><span>\u6700\u8FD1 500 \u4F4D\u7528\u6237</span></div><div class="fact"><span>\u4E0A\u6E38\u6570\u91CF</span><span id="upCount"></span></div><div class="section-end"><button id="settingsLogout">', '\u9000\u51FA\u767B\u5F55</button></div></section>\n</main><aside id="detail" hidden aria-label="\u7528\u6237\u8BE6\u60C5"></aside></div></div>\n<dialog id="editor" aria-labelledby="editorTitle"><div class="dialog-heading"><h2 id="editorTitle"></h2><button class="icon" id="closeEditor" aria-label="\u5173\u95ED">', '</button></div><form id="editorForm"><div id="editorFields" class="form-grid"></div><div class="dialog-actions"><button type="button" id="cancelEditor">\u53D6\u6D88</button><button class="primary" id="saveEditor">\u4FDD\u5B58</button></div><p id="formError" class="error" hidden></p></form><p id="createdLink" hidden></p></dialog>\n<dialog id="confirmation" aria-labelledby="confirmationTitle"><h2 id="confirmationTitle">\u786E\u8BA4\u64CD\u4F5C</h2><p id="confirmationText"></p><div class="dialog-actions"><button id="confirmationCancel">\u53D6\u6D88</button><button id="confirmationAccept" class="primary">\u786E\u8BA4\u6267\u884C</button></div></dialog>\n<div id="rowMenu" class="row-menu" role="menu" hidden><button role="menuitem" data-menu-action="detail">\u7528\u6237\u8BE6\u60C5</button><button role="menuitem" data-menu-action="edit">\u7F16\u8F91\u8D44\u6599</button><button role="menuitem" data-menu-action="dns">\u8282\u70B9\u4E0E DNS</button></div>\n<dialog id="dnsEditor" aria-labelledby="dnsTitle"><div class="dialog-heading"><h2 id="dnsTitle">\u8282\u70B9\u4E0E DNS</h2><button class="icon" id="closeDns" aria-label="\u5173\u95ED\u8282\u70B9\u7BA1\u7406">', '</button></div><form id="dnsForm"><div class="fact"><span>\u7528\u6237</span><span id="dnsUser"></span></div><div class="fact"><span>\u6709\u6548 DNS / \u989D\u5EA6</span><span id="dnsCounts"></span></div><label style="margin-top:14px">\u6240\u5C5E\u5957\u9910\u6863\u4F4D<select id="dnsPlanId" style="margin-top:4px"></select></label><label style="margin-top:14px">\u76EE\u6807\u8282\u70B9\u6570\u91CF<input id="dnsLimit" type="number" min="1" max="20" step="1" required></label><div style="margin-top:14px"><label style="font-weight:600">\u6307\u5B9A\u4E13\u5C5E\u8282\u70B9\uFF08\u53EF\u9009\uFF09\uFF1A</label><div id="dnsNodeList" style="max-height:180px;overflow-y:auto;border:1px solid #d6d9e1;border-radius:6px;padding:8px;margin-top:6px;background:#f9fafb;font-size:13px"></div><small class="muted" style="display:block;margin-top:4px">\u52FE\u9009\u540E\u8BE5\u7528\u6237\u4EC5\u4E0B\u53D1\u9009\u4E2D\u7684\u4E13\u5C5E\u8282\u70B9\uFF1B\u82E5\u5168\u4E0D\u52FE\u9009\u5219\u6309\u4E0A\u6E38\u8282\u70B9\u6C60\u81EA\u52A8\u5206\u914D\u3002</small></div><p id="dnsResult" class="dns-result" role="status" hidden></p><p id="dnsError" class="error" hidden></p><div class="dialog-actions"><button type="button" id="fillDns" title="\u6309\u5F53\u524D\u5DF2\u4FDD\u5B58\u989D\u5EA6\u8865\u9F50 DNS">\u8865\u9F50 DNS</button><button class="primary" id="saveDns">\u4FDD\u5B58\u5E76\u5206\u914D</button></div></form></dialog>\n<dialog id="planEditor" aria-labelledby="planEditorTitle"><div class="dialog-heading"><h2 id="planEditorTitle">\u5957\u9910\u8282\u70B9\u4E0E\u53C2\u6570\u8BBE\u7F6E</h2><button class="icon" id="closePlanEditor" aria-label="\u5173\u95ED"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div><form id="planForm"><input type="hidden" id="planEditId"><div class="form-grid"><label>\u5957\u9910\u540D\u79F0<input id="planEditName" type="text" required></label><label>\u4EF7\u683C\uFF08\u5143\uFF09<input id="planEditPrice" type="number" min="0" step="0.01" required></label><label>\u6709\u6548\u5929\u6570<input id="planEditDays" type="number" min="1" max="3650" step="1" required></label><label>\u8282\u70B9\u989D\u5EA6\u4E0A\u9650<input id="planEditNodeLimit" type="number" min="1" max="20" step="1" required></label></div><div style="margin-top:14px"><div style="display:flex;justify-content:space-between;align-items:center"><label style="font-weight:600">\u6307\u5B9A\u8BE5\u5957\u9910\u4E13\u5C5E\u8282\u70B9\uFF1A</label><span style="font-size:13px"><button type="button" class="link" id="planSelectAll">\u5168\u9009</button> \xB7 <button type="button" class="link" id="planClearAll">\u6E05\u7A7A</button></span></div><div id="planNodeList" style="max-height:220px;overflow-y:auto;border:1px solid #d6d9e1;border-radius:6px;padding:8px;margin-top:6px;background:#f9fafb;font-size:13px"></div><small class="muted" style="display:block;margin-top:4px">\u52FE\u9009\u540E\uFF0C\u5F00\u901A\u6216\u5F52\u5C5E\u8BE5\u5957\u9910\u7684\u7528\u6237\u5C06\u81EA\u52A8\u4ECE\u6240\u9009\u8282\u70B9\u4E2D\u5206\u914D DNS\uFF1B\u82E5\u5168\u4E0D\u52FE\u9009\u5219\u4ECE\u5168\u5C40\u8282\u70B9\u6C60\u5206\u914D\u3002</small></div><label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px;cursor:pointer"><input type="checkbox" id="planSyncUsers" checked style="width:auto"><span>\u4FDD\u5B58\u540E\u7ACB\u5373\u540C\u6B65\u66F4\u65B0\u8BE5\u5957\u9910\u4E0B\u73B0\u6709\u6709\u6548\u7528\u6237\u7684 DNS \u8282\u70B9</span></label><p id="planError" class="error" hidden></p><div class="dialog-actions"><button type="button" id="cancelPlanEditor">\u53D6\u6D88</button><button class="primary" id="savePlanBtn">\u4FDD\u5B58\u5E76\u5E94\u7528</button></div></form></dialog>\n<div id="message" role="status" hidden></div>\n<script>\nconst I=', `;
 const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const stamp=x=>{if(!x)return '\u2014';const v=String(x);return v.includes('T')||/[zZ]|[+]dd:dd$/.test(v)?v:v.replace(' ','T')+'Z'};
 const fmt=x=>!x?'\u2014':new Intl.DateTimeFormat('zh-CN',{timeZone:'Asia/Shanghai',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(stamp(x))).replaceAll('/','-');
-const now=()=>Date.now();let key=sessionStorage.getItem('adminKey')||localStorage.getItem('adminKey')||'',data={users:[],upstreams:[]},view='users',filter='all',userPage=1,orderPage=1,selected=null,detail=null,detailTab='devices',days=30,editorMode='',busy=false,detailRequest=0,messageTimer,initialSelection=false,menuUser=null;
+const now=()=>Date.now();let key=sessionStorage.getItem('adminKey')||localStorage.getItem('adminKey')||'',data={users:[],upstreams:[],plans:[],availableNodes:[]},view='users',filter='all',userPage=1,orderPage=1,selected=null,detail=null,detailTab='devices',days=30,editorMode='',busy=false,detailRequest=0,messageTimer,initialSelection=false,menuUser=null;
 function notify(text,error=false){clearTimeout(messageTimer);$('#message').textContent=text;$('#message').classList.toggle('error',error);$('#message').hidden=false;messageTimer=setTimeout(()=>$('#message').hidden=true,6000)}
 async function call(path,opt={}){const r=await fetch(path,{...opt,headers:{'Content-Type':'application/json',Authorization:'Bearer '+key}});const d=await r.json();if(!r.ok){if(r.status===401){sessionStorage.removeItem('adminKey');localStorage.removeItem('adminKey');$('#app').hidden=true;$('#login').hidden=false}throw new Error(d.error||'\u8BF7\u6C42\u5931\u8D25\uFF08'+r.status+'\uFF09')}return d}
 function state(u){if(u.status==='disabled')return 'disabled';const left=Date.parse(stamp(u.expires_at))-now();if(u.status==='expired'||left<=0)return 'expired';return left<=3*86400000?'soon':'active'}
 const statusName={active:'\u4F7F\u7528\u4E2D',soon:'\u5373\u5C06\u5230\u671F',expired:'\u5DF2\u5230\u671F',disabled:'\u5DF2\u505C\u7528'};
 const badge=u=>'<span class="badge '+state(u)+'">'+statusName[state(u)]+'</span>';
+const defaultPlans=[{id:'trial_1d',name:'\u4F53\u9A8C',nodeLimit:5},{id:'basic_monthly',name:'\u57FA\u7840',nodeLimit:10},{id:'advanced_monthly',name:'\u9AD8\u7EA7',nodeLimit:15},{id:'residential_monthly',name:'\u5BB6\u5BBD',nodeLimit:20}];
+const getPlans=()=>data.plans?.length?data.plans:defaultPlans;
+const normPlan=id=>['standard_monthly','standard_quarterly','standard_yearly'].includes(id)?'advanced_monthly':(id||'trial_1d');
+const planName=id=>{const p=getPlans().find(x=>x.id===normPlan(id));return p?p.name:normPlan(id)};
+const planBadge=id=>'<span class="badge" style="margin-left:6px;background:#eef2ff;color:#1958ed;font-weight:500">'+esc(planName(id))+'</span>';
 function renderUsers(){
   const q=$('#search').value.trim().toLowerCase().replace(/^#/,'');
   const list=data.users.filter(u=>(filter==='all'||state(u)===filter)&&(!q||[u.name,u.email,u.nickname,String(u.id)].some(v=>String(v||'').toLowerCase().includes(q))));
   const pages=Math.max(1,Math.ceil(list.length/20));userPage=Math.min(userPage,pages);
-  $('#userRows').innerHTML=list.slice((userPage-1)*20,userPage*20).map(u=>'<tr data-user="'+u.id+'" tabindex="0" aria-selected="'+(selected===u.id)+'" class="'+(selected===u.id?'selected':'')+'"><td class="selection-cell"><input type="checkbox" data-pick="'+u.id+'" aria-label="\u67E5\u770B '+esc(u.name)+' \u7684\u8BE6\u60C5" '+(selected===u.id?'checked':'')+'></td><td><strong>'+esc(u.name)+'</strong><span class="muted">#'+u.id+'</span><span class="mobile-expiry">'+fmt(u.expires_at)+'</span></td><td>'+badge(u)+'</td><td class="date-cell">'+fmt(u.expires_at)+'</td><td>'+Number(u.device_count||0)+'</td><td><div class="row-actions"><button class="link" data-open="'+u.id+'">\u7EED\u671F</button><button class="icon" title="\u66F4\u591A\u64CD\u4F5C" aria-label="'+esc(u.name)+' \u66F4\u591A\u64CD\u4F5C" aria-haspopup="menu" data-menu="'+u.id+'">'+I.MoreHorizontal+'</button></div></td></tr>').join('')||'<tr><td colspan="6" class="empty">\u6CA1\u6709\u7B26\u5408\u6761\u4EF6\u7684\u7528\u6237</td></tr>';
+  $('#userRows').innerHTML=list.slice((userPage-1)*20,userPage*20).map(u=>'<tr data-user="'+u.id+'" tabindex="0" aria-selected="'+(selected===u.id)+'" class="'+(selected===u.id?'selected':'')+'"><td class="selection-cell"><input type="checkbox" data-pick="'+u.id+'" aria-label="\u67E5\u770B '+esc(u.name)+' \u7684\u8BE6\u60C5" '+(selected===u.id?'checked':'')+'></td><td><strong>'+esc(u.name)+'</strong><span class="muted">#'+u.id+'</span>'+planBadge(u.plan_id)+'<span class="mobile-expiry">'+fmt(u.expires_at)+'</span></td><td>'+badge(u)+'</td><td class="date-cell">'+fmt(u.expires_at)+'</td><td>'+Number(u.device_count||0)+'</td><td><div class="row-actions"><button class="link" data-open="'+u.id+'">\u7EED\u671F</button><button class="icon" title="\u66F4\u591A\u64CD\u4F5C" aria-label="'+esc(u.name)+' \u66F4\u591A\u64CD\u4F5C" aria-haspopup="menu" data-menu="'+u.id+'">'+I.MoreHorizontal+'</button></div></td></tr>').join('')||'<tr><td colspan="6" class="empty">\u6CA1\u6709\u7B26\u5408\u6761\u4EF6\u7684\u7528\u6237</td></tr>';
   $('#userCount').textContent='\u5171 '+list.length+' \u4F4D\u7528\u6237';$('#userPage').textContent=userPage+' / '+pages;$('#prevUsers').disabled=userPage===1;$('#nextUsers').disabled=userPage===pages;
 }
 function renderUpstreams(){$('#upRows').innerHTML=data.upstreams.map(u=>'<tr><td>'+esc(u.name)+'</td><td>'+u.node_count+'</td><td>'+fmt(u.last_synced_at)+'</td><td>'+(u.last_error?'<span class="danger">'+esc(u.last_error)+'</span>':'<span class="badge">\u6B63\u5E38</span>')+'</td><td><button data-sync="'+u.id+'">'+I.RefreshCw+'\u540C\u6B65</button></td></tr>').join('')||'<tr><td colspan="5" class="empty">\u6682\u65E0\u4E0A\u6E38\u8BA2\u9605</td></tr>'}
-async function load(){data=await call('/api/dashboard');sessionStorage.setItem('adminKey',key);localStorage.removeItem('adminKey');$('#login').hidden=true;$('#app').hidden=false;renderUsers();renderUpstreams();$('#upCount').textContent=data.upstreams.length;$('#baseUrl').textContent=location.origin;if(view==='orders')await loadOrders();if(!initialSelection){initialSelection=true;if(innerWidth>=1120&&data.users.length)await openUser(data.users[0].id)}}
+function renderPlans(){
+  const nodesMap=new Map((data.availableNodes||[]).map(n=>[Number(n.id),n]));
+  $('#planRows').innerHTML=getPlans().map(p=>{
+    const selIds=p.selectedNodeIds||[];
+    const matchedNames=selIds.map(id=>nodesMap.get(Number(id))?.name).filter(Boolean);
+    const nodeSummary=selIds.length?'<div><strong>\u5DF2\u6307\u5B9A '+selIds.length+' \u4E2A\u8282\u70B9</strong><p class="muted" style="margin:2px 0 0;font-size:12px">'+esc(matchedNames.slice(0,5).join(' / '))+(matchedNames.length>5?' \u7B49':'')+'</p></div>':'<span class="muted">\u672A\u6307\u5B9A\uFF08\u9ED8\u8BA4\u5168\u5C40\u6C60\uFF09</span>';
+    return '<tr><td><strong>'+esc(p.name)+'</strong> <span class="muted">'+esc(p.id)+'</span></td><td>\xA5'+((p.amountCents||0)/100).toFixed(2)+' / '+(p.days||30)+' \u5929</td><td>'+(p.nodeLimit||10)+' \u4E2A</td><td>'+nodeSummary+'</td><td>'+Number(p.userCount||0)+' \u4F4D\u7528\u6237</td><td><button class="primary" data-edit-plan="'+esc(p.id)+'">\u5206\u914D\u8282\u70B9 / \u8BBE\u7F6E</button></td></tr>';
+  }).join('');
+}
+async function load(){data=await call('/api/dashboard');sessionStorage.setItem('adminKey',key);localStorage.removeItem('adminKey');$('#login').hidden=true;$('#app').hidden=false;renderUsers();renderUpstreams();renderPlans();$('#upCount').textContent=data.upstreams.length;$('#baseUrl').textContent=location.origin;if(view==='orders')await loadOrders();if(!initialSelection){initialSelection=true;if(innerWidth>=1120&&data.users.length)await openUser(data.users[0].id)}}
 async function openUser(id){const ticket=++detailRequest;selected=id;days=30;detail=null;renderUsers();$('#workspace').classList.add('with-detail');$('#detail').hidden=false;$('#detail').innerHTML='<div class="aside-heading"><h2>\u7528\u6237\u8BE6\u60C5</h2><button class="icon" data-close title="\u5173\u95ED\u8BE6\u60C5" aria-label="\u5173\u95ED\u8BE6\u60C5">'+I.X+'</button></div><p class="muted">\u6B63\u5728\u52A0\u8F7D\u2026</p>';try{const result=await call('/api/users/'+id);if(ticket!==detailRequest)return;detail=result;renderDetail()}catch(e){if(ticket===detailRequest){closeDetail();throw e}}}
 function closeDetail(){++detailRequest;selected=null;detail=null;$('#detail').hidden=true;$('#workspace').classList.remove('with-detail');renderUsers()}
 function renderDetail(){
@@ -192,7 +206,7 @@ function renderDetail(){
   $('#detail').innerHTML='<div class="aside-heading"><h2>\u7528\u6237\u8BE6\u60C5</h2><button class="icon" data-close title="\u5173\u95ED\u8BE6\u60C5" aria-label="\u5173\u95ED\u8BE6\u60C5">'+I.X+'</button></div>'+
   '<div class="identity"><div><h2>'+esc(u.name)+'</h2><p>#'+u.id+'</p></div>'+badge(u)+'</div>'+
   '<div class="facts"><div class="fact"><span>\u8D26\u53F7\u72B6\u6001</span><span class="badge '+(disabled?'disabled':'')+'">'+(disabled?'\u5DF2\u505C\u7528':'\u5DF2\u542F\u7528')+'</span></div>'+
-  '<div class="fact"><span>\u8BA2\u9605\u72B6\u6001</span>'+badge(u)+'</div><div class="fact"><span>\u5230\u671F\u65F6\u95F4</span><span>'+fmt(u.expires_at)+'</span></div>'+
+  '<div class="fact"><span>\u8BA2\u9605\u72B6\u6001</span>'+badge(u)+'</div><div class="fact"><span>\u6240\u5C5E\u5957\u9910</span><span class="email-value"><span>'+esc(planName(u.plan_id))+'</span><button class="link" data-edit="'+u.id+'">\u5207\u6362</button></span></div><div class="fact"><span>\u5230\u671F\u65F6\u95F4</span><span>'+fmt(u.expires_at)+'</span></div>'+
   '<div class="fact"><span>\u90AE\u7BB1</span><span class="email-value"><span>'+esc(p.email||'\u672A\u586B\u5199')+'</span><button class="link" data-edit="'+u.id+'">\u7F16\u8F91</button></span></div>'+
   '<div class="fact"><span>\u8BBE\u5907 / \u4E0A\u9650</span><span class="email-value"><span>'+Number(summary.device_count??detail.devices.length)+' / '+(u.device_limit||2)+'</span><button class="link" id="viewDevices">\u67E5\u770B\u8BBE\u5907</button></span></div>'+
   '<div class="fact"><span>\u8BA2\u5355</span><span>'+Number(summary.order_count??detail.orders.length)+'</span></div>'+
@@ -210,14 +224,14 @@ function expiry(){const count=days||Number($('#dayCount')?.value);if(!Number.isI
 function preview(){try{$('#renewPreview').textContent=fmt(expiry())}catch{$('#renewPreview').textContent='\u8BF7\u8F93\u5165\u6709\u6548\u5929\u6570'}}
 const orderStatus=s=>({paid:'\u5DF2\u652F\u4ED8',pending:'\u5F85\u652F\u4ED8',created:'\u5F85\u652F\u4ED8',cancelled:'\u5DF2\u53D6\u6D88',failed:'\u5931\u8D25',expired:'\u5DF2\u8FC7\u671F'}[s]||s);
 async function loadOrders(){const d=await call('/api/admin/orders?page='+orderPage);$('#orderRows').innerHTML=d.orders.map(o=>'<tr><td>'+esc(o.order_no)+'</td><td>'+esc(o.user_name)+' <button class="link" data-order-user="'+o.user_id+'">#'+o.user_id+'</button></td><td>'+esc(o.plan_id)+'</td><td>'+(o.amount_cents/100).toFixed(2)+' '+esc(o.currency)+'</td><td>'+esc(orderStatus(o.status))+'</td><td class="date-cell">'+fmt(o.created_at)+'</td></tr>').join('')||'<tr><td colspan="6" class="empty">\u6682\u65E0\u8BA2\u5355</td></tr>';$('#orderPage').textContent='\u7B2C '+orderPage+' \u9875';$('#prevOrders').disabled=orderPage===1;$('#nextOrders').disabled=!d.hasMore}
-async function setView(next){view=next;closeDetail();document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));['users','upstreams','orders','settings'].forEach(v=>$('#'+v+'View').hidden=v!==view);const titles={users:['\u7528\u6237\u7BA1\u7406','\u7BA1\u7406\u7528\u6237\u3001\u6709\u6548\u671F\u4E0E\u5206\u4EAB\u6743\u9650'],upstreams:['\u4E0A\u6E38\u8BA2\u9605','\u8BA2\u9605\u6765\u6E90\u4E0E\u8282\u70B9\u540C\u6B65'],orders:['\u8BA2\u5355\u8BB0\u5F55','\u652F\u4ED8\u8BA2\u5355\u4E0E\u4F1A\u5458\u5957\u9910'],settings:['\u7CFB\u7EDF\u8BBE\u7F6E','\u5F53\u524D\u670D\u52A1\u4E0E\u7BA1\u7406\u5458\u4F1A\u8BDD']};$('#pageTitle').textContent=titles[view][0];$('#pageSubtitle').textContent=titles[view][1];$('#newButton').hidden=!['users','upstreams'].includes(view);$('#newButton span').textContent=view==='upstreams'?'\u6DFB\u52A0\u4E0A\u6E38':'\u65B0\u5EFA\u7528\u6237';if(view==='orders')await loadOrders()}
+async function setView(next){view=next;closeDetail();document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));['users','plans','upstreams','orders','settings'].forEach(v=>$('#'+v+'View').hidden=v!==view);const titles={users:['\u7528\u6237\u7BA1\u7406','\u7BA1\u7406\u7528\u6237\u3001\u6709\u6548\u671F\u4E0E\u5206\u4EAB\u6743\u9650'],plans:['\u5957\u9910\u7BA1\u7406','\u7EDF\u4E00\u4E3A\u300C\u4F53\u9A8C / \u57FA\u7840 / \u9AD8\u7EA7 / \u5BB6\u5BBD\u300D\u5957\u9910\u6307\u5B9A\u4E13\u5C5E\u8282\u70B9\u6C60'],upstreams:['\u4E0A\u6E38\u8BA2\u9605','\u8BA2\u9605\u6765\u6E90\u4E0E\u8282\u70B9\u540C\u6B65'],orders:['\u8BA2\u5355\u8BB0\u5F55','\u652F\u4ED8\u8BA2\u5355\u4E0E\u4F1A\u5458\u5957\u9910'],settings:['\u7CFB\u7EDF\u8BBE\u7F6E','\u5F53\u524D\u670D\u52A1\u4E0E\u7BA1\u7406\u5458\u4F1A\u8BDD']};$('#pageTitle').textContent=titles[view][0];$('#pageSubtitle').textContent=titles[view][1];$('#newButton').hidden=!['users','upstreams'].includes(view);$('#newButton span').textContent=view==='upstreams'?'\u6DFB\u52A0\u4E0A\u6E38':'\u65B0\u5EFA\u7528\u6237';if(view==='orders')await loadOrders()}
 function field(label,name,value='',type='text',required=false){return '<label>'+label+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(required?'required':'')+'></label>'}
-function showEditor(mode){editorMode=mode;$('#formError').hidden=true;$('#createdLink').hidden=true;$('#editorForm').hidden=false;$('#editorTitle').textContent=mode==='user'?'\u65B0\u5EFA\u7528\u6237':mode==='upstream'?'\u6DFB\u52A0\u4E0A\u6E38':'\u7F16\u8F91\u7528\u6237';let html='';if(mode==='user'){html=field('\u7528\u6237\u540D','name','','text',true)+'<label>\u4E0A\u6E38<select name="upstreamId" required>'+data.upstreams.map(u=>'<option value="'+u.id+'">'+esc(u.name)+'</option>').join('')+'</select></label>'+field('\u6709\u6548\u671F\u81F3\uFF08\u672C\u5730\u65F6\u95F4\uFF09','expiresAt','','datetime-local',true)+'<label>\u8282\u70B9\u989D\u5EA6<input name="nodeLimit" type="number" min="1" max="20" value="5" required></label><label>\u8BBE\u5907\u6570\u91CF\u4E0A\u9650<input name="deviceLimit" type="number" min="1" max="50" value="2" required></label>'}else if(mode==='upstream'){html=field('\u540D\u79F0','name','','text',true)+'<label class="full">\u8BA2\u9605\u5730\u5740 \u6216 \u8282\u70B9\u94FE\u63A5 (vless / trojan / vmess / ss)<textarea name="subscriptionUrl" rows="4" placeholder="\u652F\u6301\u8F93\u5165 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u8282\u70B9\u94FE\u63A5 (vless/trojan/vmess/ss\uFF0C\u652F\u6301 Base64)" required style="margin-top:7px;width:100%"></textarea></label>'}else{const u=detail.user,p=detail.profile;html=field('\u7528\u6237\u540D','name',u.name,'text',true)+field('\u90AE\u7BB1','email',p.email||'','email')+field('\u624B\u673A\u53F7','phone',p.phone||'')+field('\u6635\u79F0','nickname',p.nickname||'')+'<label>\u8BBE\u5907\u6570\u91CF\u4E0A\u9650<input name="deviceLimit" type="number" min="1" max="50" step="1" value="'+(u.device_limit||2)+'" required></label><label class="full">\u5907\u6CE8<textarea name="remark" rows="3">'+esc(p.remark||'')+'</textarea></label>'}$('#editorFields').innerHTML=html;$('#editor').showModal()}
-async function saveEditor(e){e.preventDefault();if(busy)return;busy=true;$('#saveEditor').disabled=true;try{const f=Object.fromEntries(new FormData(e.target));if(editorMode==='user'){const d=await call('/api/users',{method:'POST',body:JSON.stringify({...f,upstreamId:Number(f.upstreamId),nodeLimit:Number(f.nodeLimit),deviceLimit:Number(f.deviceLimit||2),expiresAt:new Date(f.expiresAt).toISOString()})});await load();$('#editorForm').hidden=true;$('#createdLink').hidden=false;$('#createdLink').textContent='\u8BA2\u9605\u5730\u5740\uFF08\u4EC5\u663E\u793A\u672C\u6B21\uFF09\uFF1A'+d.subscriptionUrl}else if(editorMode==='upstream'){const raw=f.subscriptionUrl.trim();if(!raw)throw new Error('\u8BF7\u8F93\u5165\u8BA2\u9605\u5730\u5740\u6216\u8282\u70B9\u94FE\u63A5');const isHttp=raw.startsWith('http://')||raw.startsWith('https://'),isNode=['vless://','vmess://','trojan://','ss://'].some(p=>raw.includes(p));if(!isHttp&&!isNode&&raw.length<20)throw new Error('\u8BF7\u8F93\u5165\u6709\u6548\u7684 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u4EE5 vless/vmess/trojan/ss \u5F00\u5934\u7684\u8282\u70B9\u94FE\u63A5');const res=await call('/api/upstreams',{method:'POST',body:JSON.stringify({name:f.name.trim(),subscriptionUrl:raw})});await load();$('#editor').close();if(res.importedNodes){notify('\u5DF2\u76F4\u63A5\u5F55\u5165 '+res.importedNodes+' \u4E2A\u8282\u70B9');return}}else{const id=selected;await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({name:f.name,deviceLimit:Number(f.deviceLimit||2),profile:{email:f.email,phone:f.phone,nickname:f.nickname,remark:f.remark}})});await load();await openUser(id);$('#editor').close()}notify('\u4FDD\u5B58\u6210\u529F')}catch(err){$('#formError').textContent=err.message;$('#formError').hidden=false}finally{busy=false;$('#saveEditor').disabled=false}}
+function showEditor(mode){editorMode=mode;$('#formError').hidden=true;$('#createdLink').hidden=true;$('#editorForm').hidden=false;$('#editorTitle').textContent=mode==='user'?'\u65B0\u5EFA\u7528\u6237':mode==='upstream'?'\u6DFB\u52A0\u4E0A\u6E38':'\u7F16\u8F91\u7528\u6237';let html='';if(mode==='user'){html=field('\u7528\u6237\u540D','name','','text',true)+'<label>\u6240\u5C5E\u5957\u9910<select name="planId" required>'+getPlans().map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></label><label>\u4E0A\u6E38<select name="upstreamId" required>'+data.upstreams.map(u=>'<option value="'+u.id+'">'+esc(u.name)+'</option>').join('')+'</select></label>'+field('\u6709\u6548\u671F\u81F3\uFF08\u672C\u5730\u65F6\u95F4\uFF09','expiresAt','','datetime-local',true)+'<label>\u8282\u70B9\u989D\u5EA6<input name="nodeLimit" type="number" min="1" max="20" value="5" required></label><label>\u8BBE\u5907\u6570\u91CF\u4E0A\u9650<input name="deviceLimit" type="number" min="1" max="50" value="2" required></label>'}else if(mode==='upstream'){html=field('\u540D\u79F0','name','','text',true)+'<label class="full">\u8BA2\u9605\u5730\u5740 \u6216 \u8282\u70B9\u94FE\u63A5 (vless / trojan / vmess / ss)<textarea name="subscriptionUrl" rows="4" placeholder="\u652F\u6301\u8F93\u5165 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u8282\u70B9\u94FE\u63A5 (vless/trojan/vmess/ss\uFF0C\u652F\u6301 Base64)" required style="margin-top:7px;width:100%"></textarea></label>'}else{const u=detail.user,p=detail.profile,curPlan=normPlan(u.plan_id);html=field('\u7528\u6237\u540D','name',u.name,'text',true)+'<label>\u6240\u5C5E\u5957\u9910<select name="planId">'+getPlans().map(pl=>'<option value="'+esc(pl.id)+'" '+(pl.id===curPlan?'selected':'')+'>'+esc(pl.name)+'</option>').join('')+'</select></label>'+field('\u90AE\u7BB1','email',p.email||'','email')+field('\u624B\u673A\u53F7','phone',p.phone||'')+field('\u6635\u79F0','nickname',p.nickname||'')+'<label>\u8BBE\u5907\u6570\u91CF\u4E0A\u9650<input name="deviceLimit" type="number" min="1" max="50" step="1" value="'+(u.device_limit||2)+'" required></label><label class="full">\u5907\u6CE8<textarea name="remark" rows="3">'+esc(p.remark||'')+'</textarea></label>'}$('#editorFields').innerHTML=html;$('#editor').showModal()}
+async function saveEditor(e){e.preventDefault();if(busy)return;busy=true;$('#saveEditor').disabled=true;try{const f=Object.fromEntries(new FormData(e.target));if(editorMode==='user'){const d=await call('/api/users',{method:'POST',body:JSON.stringify({...f,upstreamId:Number(f.upstreamId),nodeLimit:Number(f.nodeLimit),deviceLimit:Number(f.deviceLimit||2),expiresAt:new Date(f.expiresAt).toISOString()})});await load();$('#editorForm').hidden=true;$('#createdLink').hidden=false;$('#createdLink').textContent='\u8BA2\u9605\u5730\u5740\uFF08\u4EC5\u663E\u793A\u672C\u6B21\uFF09\uFF1A'+d.subscriptionUrl}else if(editorMode==='upstream'){const raw=f.subscriptionUrl.trim();if(!raw)throw new Error('\u8BF7\u8F93\u5165\u8BA2\u9605\u5730\u5740\u6216\u8282\u70B9\u94FE\u63A5');const isHttp=raw.startsWith('http://')||raw.startsWith('https://'),isNode=['vless://','vmess://','trojan://','ss://'].some(p=>raw.includes(p));if(!isHttp&&!isNode&&raw.length<20)throw new Error('\u8BF7\u8F93\u5165\u6709\u6548\u7684 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u4EE5 vless/vmess/trojan/ss \u5F00\u5934\u7684\u8282\u70B9\u94FE\u63A5');const res=await call('/api/upstreams',{method:'POST',body:JSON.stringify({name:f.name.trim(),subscriptionUrl:raw})});await load();$('#editor').close();if(res.importedNodes){notify('\u5DF2\u76F4\u63A5\u5F55\u5165 '+res.importedNodes+' \u4E2A\u8282\u70B9');return}}else{const id=selected;await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({name:f.name,planId:f.planId,deviceLimit:Number(f.deviceLimit||2),profile:{email:f.email,phone:f.phone,nickname:f.nickname,remark:f.remark}})});await load();await openUser(id);$('#editor').close()}notify('\u4FDD\u5B58\u6210\u529F')}catch(err){$('#formError').textContent=err.message;$('#formError').hidden=false}finally{busy=false;$('#saveEditor').disabled=false}}
 function showDnsEditor(){
   $('#dnsUser').textContent=detail.user.name+' (#'+detail.user.id+')';
   $('#dnsCounts').textContent=Number(detail.user.dns_count||0)+' / '+detail.user.node_limit;
-  $('#dnsLimit').value=detail.user.node_limit;$('#dnsResult').hidden=true;
+  const curPlan=normPlan(detail.user.plan_id);$('#dnsPlanId').innerHTML=getPlans().map(p=>'<option value="'+esc(p.id)+'" '+(p.id===curPlan?'selected':'')+'>'+esc(p.name)+'</option>').join('');$('#dnsLimit').value=detail.user.node_limit;$('#dnsResult').hidden=true;
   const inactive=detail.user.status!=='active'||Date.parse(stamp(detail.user.expires_at))<=now();
   $('#dnsError').hidden=!inactive;$('#dnsError').textContent=inactive?'\u8D26\u53F7\u5DF2\u5230\u671F\u6216\u505C\u7528\uFF0C\u8BF7\u5148\u7EED\u671F\u6216\u542F\u7528\u8D26\u53F7\u3002':'';
   $('#saveDns').disabled=inactive;$('#fillDns').disabled=inactive;$('#dnsLimit').disabled=inactive;
@@ -239,7 +253,7 @@ async function manageDns(save){
     const id=selected,nodeLimit=Number($('#dnsLimit').value),current=detail.user.node_limit;
     if(save&&(!Number.isInteger(nodeLimit)||nodeLimit<1||nodeLimit>20))throw new Error('\u8282\u70B9\u6570\u91CF\u5FC5\u987B\u4E3A 1 \u5230 20 \u7684\u6574\u6570');
     if(save&&nodeLimit<current&&!await askConfirmation('\u8282\u70B9\u989D\u5EA6\u5C06\u4ECE '+current+' \u964D\u4E3A '+nodeLimit+'\uFF1B\u8D85\u51FA\u65B0\u989D\u5EA6\u7684 DNS \u5C06\u5220\u9664\u3002\u786E\u8BA4\u8C03\u6574\uFF1F'))return;
-    const selectedNodeIds=Array.from(document.querySelectorAll('#dnsNodeList input[type="checkbox"]:checked')).map(cb=>Number(cb.value));const result=await call('/api/users/'+id+'/dns',{method:'POST',body:JSON.stringify(save?{nodeLimit,selectedNodeIds}:{selectedNodeIds})});
+    const planId=$('#dnsPlanId').value;const selectedNodeIds=Array.from(document.querySelectorAll('#dnsNodeList input[type="checkbox"]:checked')).map(cb=>Number(cb.value));const result=await call('/api/users/'+id+'/dns',{method:'POST',body:JSON.stringify(save?{nodeLimit,planId,selectedNodeIds}:{planId,selectedNodeIds})});
     $('#dnsResult').textContent='\u6709\u6548 DNS '+result.activeDnsCount+' / '+result.nodeLimit+'\uFF1B\u65B0\u589E '+result.created+'\uFF0C\u5220\u9664 '+result.removed+'\uFF0C\u5931\u8D25 '+result.failed+'\u3002'+(result.warning||'');
     $('#dnsResult').className=result.ok?'dns-result':'dns-result error';$('#dnsResult').hidden=false;
     $('#dnsCounts').textContent=result.activeDnsCount+' / '+result.nodeLimit;$('#dnsLimit').value=result.nodeLimit;
@@ -248,6 +262,55 @@ async function manageDns(save){
   finally{busy=false;const inactive=detail?.user.status!=='active'||!(Date.parse(stamp(detail?.user.expires_at))>now());$('#saveDns').disabled=inactive;$('#fillDns').disabled=inactive}
 }
 $('#closeDns').onclick=()=>{if(!busy)$('#dnsEditor').close()};
+function openPlanEditor(planId){
+  const p=getPlans().find(x=>x.id===planId);if(!p)return;
+  $('#planEditId').value=p.id;
+  $('#planEditName').value=p.name;
+  $('#planEditPrice').value=((p.amountCents||0)/100).toFixed(2);
+  $('#planEditDays').value=p.days||30;
+  $('#planEditNodeLimit').value=p.nodeLimit||10;
+  $('#planSyncUsers').checked=true;
+  $('#planError').hidden=true;
+  const sel=p.selectedNodeIds||[],nodes=data.availableNodes||[];
+  if(!nodes.length){
+    $('#planNodeList').innerHTML='<span class="muted">\u6682\u65E0\u53EF\u5206\u914D\u8282\u70B9\uFF0C\u8BF7\u5148\u5728\u300C\u4E0A\u6E38\u8BA2\u9605\u300D\u4E2D\u5BFC\u5165\u8282\u70B9</span>';
+  }else{
+    $('#planNodeList').innerHTML=nodes.map(n=>{
+      const chk=sel.includes(Number(n.id))?'checked':'';
+      return '<label style="display:flex;align-items:center;gap:8px;padding:3px 0;cursor:pointer"><input type="checkbox" value="'+n.id+'" '+chk+'><span><strong>'+esc(n.name)+'</strong> <small class="muted">('+esc(n.protocol)+' \xB7 '+esc(n.upstream_name)+')</small></span></label>';
+    }).join('');
+  }
+  $('#planEditor').showModal();
+}
+$('#plansView').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-edit-plan]');
+  if(btn&&!busy)openPlanEditor(btn.dataset.editPlan);
+});
+$('#closePlanEditor').onclick=()=>{if(!busy)$('#planEditor').close()};
+$('#cancelPlanEditor').onclick=()=>{if(!busy)$('#planEditor').close()};
+$('#planSelectAll').onclick=()=>document.querySelectorAll('#planNodeList input[type="checkbox"]').forEach(cb=>cb.checked=true);
+$('#planClearAll').onclick=()=>document.querySelectorAll('#planNodeList input[type="checkbox"]').forEach(cb=>cb.checked=false);
+$('#planForm').onsubmit=async e=>{
+  e.preventDefault();if(busy)return;busy=true;$('#savePlanBtn').disabled=true;$('#planError').hidden=true;
+  try{
+    const planId=$('#planEditId').value;
+    const name=$('#planEditName').value.trim();
+    const amountCents=Math.round(Number($('#planEditPrice').value||0)*100);
+    const days=Number($('#planEditDays').value||30);
+    const nodeLimit=Number($('#planEditNodeLimit').value||10);
+    const syncUsers=$('#planSyncUsers').checked;
+    const selectedNodeIds=Array.from(document.querySelectorAll('#planNodeList input[type="checkbox"]:checked')).map(cb=>Number(cb.value));
+    const res=await call('/api/plans/'+planId,{method:'POST',body:JSON.stringify({name,amountCents,days,nodeLimit,selectedNodeIds,syncUsers})});
+    await load();
+    $('#planEditor').close();
+    notify('\u5957\u9910\u300C'+name+'\u300D\u5DF2\u4FDD\u5B58\uFF08\u5DF2\u6307\u5B9A '+selectedNodeIds.length+' \u4E2A\u8282\u70B9'+(syncUsers?'\uFF0C\u540C\u6B65\u66F4\u65B0 '+res.syncedUsers+' \u4F4D\u7528\u6237':'')+'\uFF09');
+  }catch(err){
+    $('#planError').textContent=err.message;$('#planError').hidden=false;
+  }finally{
+    busy=false;$('#savePlanBtn').disabled=false;
+  }
+};
+
 $('#dnsEditor').oncancel=e=>{if(busy)e.preventDefault()};
 $('#dnsForm').onsubmit=e=>{e.preventDefault();manageDns(true)};$('#fillDns').onclick=()=>manageDns(false);
 $('#detail').addEventListener('click',e=>{if(e.target.closest('#manageDns')&&!busy)showDnsEditor()});
@@ -415,12 +478,37 @@ __name22(dnsType, "dnsType");
 var jsonHeaders = { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" };
 var encoder2 = new TextEncoder();
 var appPlans = [
-  { id: "trial_1d", name: "\u4F53\u9A8C\u7248", amountCents: 100, currency: "CNY", days: 1, nodeLimit: 8, trafficGb: 5 },
-  { id: "basic_monthly", name: "\u57FA\u7840\u7248", amountCents: 1990, currency: "CNY", days: 30, nodeLimit: 12, trafficGb: 100 },
-  { id: "standard_monthly", name: "\u6807\u51C6\u7248", amountCents: 2990, currency: "CNY", days: 30, nodeLimit: 20, trafficGb: 300 },
-  { id: "standard_quarterly", name: "\u5B63\u5EA6\u7248", amountCents: 7990, currency: "CNY", days: 90, nodeLimit: 20, trafficGb: 900 },
-  { id: "standard_yearly", name: "\u5E74\u8D39\u7248", amountCents: 19900, currency: "CNY", days: 365, nodeLimit: 20, trafficGb: 3600 }
+  { id: "trial_1d", name: "\u4F53\u9A8C", amountCents: 100, currency: "CNY", days: 1, nodeLimit: 5, trafficGb: 5, sortOrder: 1 },
+  { id: "basic_monthly", name: "\u57FA\u7840", amountCents: 1990, currency: "CNY", days: 30, nodeLimit: 10, trafficGb: 100, sortOrder: 2 },
+  { id: "advanced_monthly", name: "\u9AD8\u7EA7", amountCents: 2990, currency: "CNY", days: 30, nodeLimit: 15, trafficGb: 300, sortOrder: 3 },
+  { id: "residential_monthly", name: "\u5BB6\u5BBD", amountCents: 5990, currency: "CNY", days: 30, nodeLimit: 20, trafficGb: 500, sortOrder: 4 }
 ];
+function normalizePlanId(planId) {
+  const id = String(planId || "").trim();
+  if (!id) return "trial_1d";
+  if (id === "standard_monthly" || id === "standard_quarterly" || id === "standard_yearly") return "advanced_monthly";
+  return id;
+}
+__name(normalizePlanId, "normalizePlanId");
+async function loadAppPlans(env) {
+  try {
+    const rows = await env.DB.prepare("SELECT id,name,amount_cents,currency,days,node_limit,traffic_gb,sort_order,enabled FROM app_plans WHERE enabled=1 ORDER BY sort_order ASC,id ASC").all();
+    if (rows?.results?.length) {
+      return rows.results.map((r) => ({
+        id: r.id,
+        name: r.name,
+        amountCents: Number(r.amount_cents),
+        currency: r.currency || "CNY",
+        days: Number(r.days),
+        nodeLimit: Number(r.node_limit),
+        trafficGb: Number(r.traffic_gb),
+        sortOrder: Number(r.sort_order || 0)
+      }));
+    }
+  } catch {}
+  return appPlans;
+}
+__name(loadAppPlans, "loadAppPlans");
 var defaultAppUpdate = {
   versionCode: 730,
   versionName: "1.14.0",
@@ -869,14 +957,33 @@ async function reconcileUpstream(env, upstreamId) {
       await env.DB.prepare("UPDATE user_dns_records SET status='error',last_error=? WHERE id=?").bind(error instanceof Error ? error.message : String(error), row.id).run();
     }
   }
-  const users = await env.DB.prepare(`SELECT DISTINCT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,u.dns_revision
+  try {
+    await env.DB.batch([
+      env.DB.prepare(`INSERT OR IGNORE INTO user_selected_nodes(user_id, node_id)
+        SELECT s.user_id, n_new.id FROM user_selected_nodes s
+        JOIN nodes n_old ON n_old.id = s.node_id
+        JOIN nodes n_new ON n_new.upstream_id = n_old.upstream_id AND n_new.name = n_old.name AND n_new.active = 1
+        WHERE n_old.upstream_id = ? AND n_old.active = 0`).bind(upstreamId),
+      env.DB.prepare("DELETE FROM user_selected_nodes WHERE node_id IN (SELECT id FROM nodes WHERE upstream_id = ? AND active = 0)").bind(upstreamId),
+      env.DB.prepare(`INSERT OR IGNORE INTO plan_selected_nodes(plan_id, node_id)
+        SELECT p.plan_id, n_new.id FROM plan_selected_nodes p
+        JOIN nodes n_old ON n_old.id = p.node_id
+        JOIN nodes n_new ON n_new.upstream_id = n_old.upstream_id AND n_new.name = n_old.name AND n_new.active = 1
+        WHERE n_old.upstream_id = ? AND n_old.active = 0`).bind(upstreamId),
+      env.DB.prepare("DELETE FROM plan_selected_nodes WHERE node_id IN (SELECT id FROM nodes WHERE upstream_id = ? AND active = 0)").bind(upstreamId)
+    ]);
+  } catch {}
+  const users = await env.DB.prepare(`SELECT DISTINCT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,u.plan_id,u.dns_revision
     FROM users u
     WHERE u.status='active' AND u.expires_at>datetime('now') AND (
       u.upstream_id=? OR EXISTS(
         SELECT 1 FROM user_selected_nodes s JOIN nodes n ON n.id=s.node_id
         WHERE s.user_id=u.id AND n.upstream_id=?
+      ) OR EXISTS(
+        SELECT 1 FROM plan_selected_nodes p JOIN nodes n ON n.id=p.node_id
+        WHERE p.plan_id=COALESCE(u.plan_id, 'trial_1d') AND n.upstream_id=?
       )
-    )`).bind(upstreamId, upstreamId).all();
+    )`).bind(upstreamId, upstreamId, upstreamId).all();
   for (const user of users.results) await provisionUser(env, user);
 }
 __name(reconcileUpstream, "reconcileUpstream");
@@ -899,8 +1006,52 @@ __name2(syncAllUpstreams, "syncAllUpstreams");
 __name22(syncAllUpstreams, "syncAllUpstreams");
 async function provisionUser(env, user, { prune = true } = {}) {
   const limit = Math.max(1, Math.min(20, user.node_limit || 10));
+  let planId = user.plan_id;
+  if (!planId) {
+    try {
+      const uRow = await env.DB.prepare("SELECT plan_id FROM users WHERE id=?").bind(user.id).first();
+      planId = uRow?.plan_id || "trial_1d";
+    } catch {
+      planId = "trial_1d";
+    }
+  }
+  planId = normalizePlanId(planId);
+  const selected = await env.DB.prepare("SELECT node_id FROM user_selected_nodes WHERE user_id=?").bind(user.id).all();
+  let rawAllowedIds = (selected.results || []).map((row) => Number(row.node_id));
+  if (!rawAllowedIds.length) {
+    try {
+      const planSelected = await env.DB.prepare("SELECT node_id FROM plan_selected_nodes WHERE plan_id=?").bind(planId).all();
+      rawAllowedIds = (planSelected.results || []).map((row) => Number(row.node_id));
+    } catch {}
+  }
+  let allowedIds = [];
+  if (rawAllowedIds.length > 0) {
+    const resolved = await env.DB.prepare(`SELECT DISTINCT n_act.id FROM nodes n_sel
+      JOIN nodes n_act ON (n_act.id = n_sel.id OR (n_act.upstream_id = n_sel.upstream_id AND n_act.name = n_sel.name))
+      WHERE n_sel.id IN (${rawAllowedIds.map(() => "?").join(",")}) AND n_act.active = 1`).bind(...rawAllowedIds).all();
+    allowedIds = (resolved.results || []).map((r) => Number(r.id));
+  }
   const activeRows = await env.DB.prepare("SELECT id,node_id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='active' ORDER BY created_at,id").bind(user.id).all();
-  const active = activeRows.results;
+  let active = activeRows.results || [];
+  let disallowedRemoved = 0, disallowedFailed = 0;
+  if (prune && rawAllowedIds.length > 0) {
+    const kept = [];
+    for (const row of active) {
+      if (!allowedIds.includes(Number(row.node_id))) {
+        try {
+          await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
+          await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE id=?").bind(row.id).run();
+          disallowedRemoved++;
+        } catch (error) {
+          disallowedFailed++;
+          await env.DB.prepare("UPDATE user_dns_records SET status='error',last_error=? WHERE id=?").bind(error instanceof Error ? error.message : String(error), row.id).run();
+        }
+      } else {
+        kept.push(row);
+      }
+    }
+    active = kept;
+  }
   async function pruneExtras() {
     if (!prune) return { removed: 0, failed: 0 };
     const latest = await env.DB.prepare("SELECT id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='active' ORDER BY created_at,id").bind(user.id).all();
@@ -923,14 +1074,12 @@ async function provisionUser(env, user, { prune = true } = {}) {
   __name22(pruneExtras, "pruneExtras");
   if (active.length >= limit) {
     const pruned2 = await pruneExtras();
-    return { created: 0, ...pruned2 };
+    return { created: 0, removed: disallowedRemoved + pruned2.removed, failed: disallowedFailed + pruned2.failed };
   }
-  const selected = await env.DB.prepare("SELECT node_id FROM user_selected_nodes WHERE user_id=?").bind(user.id).all();
   const activeNodeIds = active.map((row) => row.node_id);
-  const selectedIds = selected.results.map((row) => row.node_id).slice(0, limit);
   const fill = limit - active.length;
   const excludeSql = activeNodeIds.length ? ` AND id NOT IN (${activeNodeIds.map(() => "?").join(",")})` : "";
-  const nodes = selectedIds.length ? await env.DB.prepare(`SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes WHERE active=1 AND id IN (${selectedIds.map(() => "?").join(",")})${excludeSql} ORDER BY RANDOM() LIMIT ?`).bind(...selectedIds, ...activeNodeIds, fill).all() : await env.DB.prepare(`SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes WHERE upstream_id=? AND active=1${excludeSql} ORDER BY RANDOM() LIMIT ?`).bind(user.upstream_id, ...activeNodeIds, fill).all();
+  const nodes = rawAllowedIds.length ? (allowedIds.length ? await env.DB.prepare(`SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes WHERE active=1 AND id IN (${allowedIds.map(() => "?").join(",")})${excludeSql} ORDER BY RANDOM() LIMIT ?`).bind(...allowedIds, ...activeNodeIds, fill).all() : { results: [] }) : await env.DB.prepare(`SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes WHERE upstream_id=? AND active=1${excludeSql} ORDER BY RANDOM() LIMIT ?`).bind(user.upstream_id, ...activeNodeIds, fill).all();
   let created = 0, failed = 0;
   for (const node of nodes.results) {
     const existing = await env.DB.prepare("SELECT id,status FROM user_dns_records WHERE user_id=? AND node_id=?").bind(user.id, node.id).first();
@@ -952,7 +1101,7 @@ async function provisionUser(env, user, { prune = true } = {}) {
     }
   }
   const pruned = await pruneExtras();
-  return { created, removed: pruned.removed, failed: failed + pruned.failed };
+  return { created, removed: disallowedRemoved + pruned.removed, failed: failed + disallowedFailed + pruned.failed };
 }
 __name(provisionUser, "provisionUser");
 __name2(provisionUser, "provisionUser");
@@ -1008,7 +1157,7 @@ __name(effectiveMembership, "effectiveMembership");
 __name2(effectiveMembership, "effectiveMembership");
 __name22(effectiveMembership, "effectiveMembership");
 async function appUserPayload(request, env, userId, deviceId) {
-  const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,device_limit,dns_revision FROM users WHERE id=?").bind(userId).first();
+  const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,COALESCE(device_limit,2) device_limit,COALESCE(plan_id,'trial_1d') plan_id,dns_revision FROM users WHERE id=?").bind(userId).first();
   if (!user) return { error: "user_not_found" };
   if (user.status === "active" && Date.parse(user.expires_at || "") <= Date.now()) {
     await deprovisionUser(env, user.id);
@@ -1027,7 +1176,9 @@ async function appUserPayload(request, env, userId, deviceId) {
   const token = String(device?.subscription_token || "");
   const expiresAt = user.expires_at;
   const configRevision = String(user.dns_revision ?? 0);
-  const paidPlan = paidOrder ? appPlans.find((plan) => plan.id === paidOrder.plan_id) : null;
+  const plansList = await loadAppPlans(env);
+  const effectivePlanId = normalizePlanId(user.plan_id || paidOrder?.plan_id || "trial_1d");
+  const paidPlan = paidOrder ? (plansList.find((plan) => plan.id === normalizePlanId(paidOrder.plan_id)) || plansList.find((plan) => plan.id === effectivePlanId)) : plansList.find((plan) => plan.id === effectivePlanId);
   const membership = effectiveMembership(user, paidOrder, paidPlan);
   const isPaid = membership.paid;
   return {
@@ -1176,7 +1327,7 @@ async function appApi(request, env, url) {
     });
   }
   if (request.method === "GET" && url.pathname === "/api/app/plans") {
-    return json({ plans: appPlans });
+    return json({ plans: await loadAppPlans(env) });
   }
   if (request.method === "POST" && url.pathname === "/api/app/email/recover/request-code") {
     const input = await body(request);
@@ -1233,9 +1384,9 @@ async function appApi(request, env, url) {
       if (!upstream) return json({ error: "no_upstream_available" }, 503);
       const subscriptionToken = randomToken();
       const expiresAt = new Date(Date.now() + 3 * 864e5).toISOString();
-      const userResult = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit,device_limit) VALUES(?,?,?,?,?,?,2)").bind(`${guestPrefix} ${subscriptionToken.slice(0, 6)}`, await hash(subscriptionToken), subscriptionToken.slice(0, 8), upstream.id, expiresAt, 5).run();
+      const userResult = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit,device_limit,plan_id) VALUES(?,?,?,?,?,?,2,'trial_1d')").bind(`${guestPrefix} ${subscriptionToken.slice(0, 6)}`, await hash(subscriptionToken), subscriptionToken.slice(0, 8), upstream.id, expiresAt, 5).run();
       const userId = Number(userResult.meta.last_row_id);
-      const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(userId).first();
+      const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,COALESCE(plan_id,'trial_1d') plan_id,dns_revision FROM users WHERE id=?").bind(userId).first();
       if (user) await provisionUser(env, user);
       const deviceResult = await env.DB.prepare("INSERT INTO app_devices(user_id,device_uuid_hash,subscription_token,platform,app_version,model) VALUES(?,?,?,?,?,?)").bind(userId, deviceHash, subscriptionToken, platform, String(input.app_version || ""), String(input.device_model || "")).run();
       device = { id: Number(deviceResult.meta.last_row_id), user_id: userId, subscription_token: subscriptionToken };
@@ -1316,7 +1467,8 @@ async function appApi(request, env, url) {
     if (session instanceof Response) return session;
     const input = await body(request);
     const planId = String(input.planId || input.plan_id || input.plan || "").trim();
-    const plan = appPlans.find((item) => item.id === planId);
+    const plansList = await loadAppPlans(env);
+    const plan = plansList.find((item) => item.id === planId || item.id === normalizePlanId(planId));
     if (!plan) return json({ error: "invalid_plan" }, 400);
     const paymentType = String(input.paymentType || input.pay_type || input.channel || "cashier").trim();
     if (!["cashier", "alipay", "wxpay"].includes(paymentType)) return json({ error: "invalid_payment_type" }, 400);
@@ -1335,7 +1487,8 @@ async function appApi(request, env, url) {
     if (session instanceof Response) return session;
     const order = await env.DB.prepare("SELECT id,order_no,user_id,plan_id,status,amount_cents,currency,metadata_json FROM app_orders WHERE order_no=? OR id=?").bind(orderMatch[1], Number(orderMatch[1]) || -1).first();
     if (!order || order.user_id !== session.user_id) return json({ error: "order_not_found" }, 404);
-    const plan = appPlans.find((item) => item.id === order.plan_id) || appPlans[0];
+    const plansList = await loadAppPlans(env);
+    const plan = plansList.find((item) => item.id === order.plan_id || item.id === normalizePlanId(order.plan_id)) || plansList[0];
     return json({ order: appOrderPayload(request, env, order, plan) });
   }
   return null;
@@ -1366,7 +1519,8 @@ async function appPaymentPage(request, env, orderNo) {
   if (!order) return new Response("Order not found", { status: 404 });
   if (order.status === "paid") return new Response('<!doctype html><meta charset="utf-8"><p>Payment already completed. You can return to the app.</p>', { headers: { "content-type": "text/html; charset=utf-8" } });
   if (!appPaymentConfigured(env)) return new Response('<!doctype html><meta charset="utf-8"><p>Payment is not configured. Please set PAYMENT_API_BASE, PAYMENT_PID and PAYMENT_KEY.</p>', { status: 503, headers: { "content-type": "text/html; charset=utf-8" } });
-  const plan = appPlans.find((item) => item.id === order.plan_id) || appPlans[0];
+  const plansList = await loadAppPlans(env);
+    const plan = plansList.find((item) => item.id === order.plan_id || item.id === normalizePlanId(order.plan_id)) || plansList[0];
   const fields = appPaymentFields(request, env, order, plan);
   const inputs = Object.entries(fields).map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}">`).join("");
   return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>Pay</title></head><body><form id="pay" method="post" action="${escapeHtml(appPaymentBase(env))}/submit.php">${inputs}<button type="submit">Continue to pay</button></form><script>document.getElementById('pay').submit();<\/script></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -1401,7 +1555,8 @@ async function appPaymentCallback(request, env) {
   if (!order) return new Response("fail", { status: 404 });
   const paid = String(values.trade_status || "").toUpperCase() === "TRADE_SUCCESS" || String(values.status || "").toLowerCase() === "paid";
   if (!paid || Number(values.money) !== Number((order.amount_cents / 100).toFixed(2))) return new Response("fail", { status: 400 });
-  const plan = appPlans.find((item) => item.id === order.plan_id) || appPlans[0];
+  const plansList = await loadAppPlans(env);
+    const plan = plansList.find((item) => item.id === order.plan_id || item.id === normalizePlanId(order.plan_id)) || plansList[0];
   const providerOrderId = String(values.trade_no || "");
   if (order.status === "paid") {
     const existing = await env.DB.prepare("SELECT order_id,applied_at FROM app_order_grants WHERE order_id=?").bind(order.id).first();
@@ -1427,7 +1582,7 @@ async function appPaymentCallback(request, env) {
   if (!grant) return new Response("fail", { status: 500 });
   if (!grant.applied_at) {
     await env.DB.batch([
-      env.DB.prepare("UPDATE users SET expires_at=strftime('%Y-%m-%dT%H:%M:%fZ', datetime(CASE WHEN julianday(expires_at)>julianday('now') THEN expires_at ELSE 'now' END, '+' || ? || ' days')),status='active',node_limit=MAX(COALESCE(node_limit,0),?) WHERE id=? AND EXISTS(SELECT 1 FROM app_order_grants WHERE order_id=? AND applied_at IS NULL)").bind(grant.days, plan.nodeLimit, order.user_id, order.id),
+      env.DB.prepare("UPDATE users SET expires_at=strftime('%Y-%m-%dT%H:%M:%fZ', datetime(CASE WHEN julianday(expires_at)>julianday('now') THEN expires_at ELSE 'now' END, '+' || ? || ' days')),status='active',plan_id=?,node_limit=MAX(COALESCE(node_limit,0),?) WHERE id=? AND EXISTS(SELECT 1 FROM app_order_grants WHERE order_id=? AND applied_at IS NULL)").bind(grant.days, normalizePlanId(plan.id), plan.nodeLimit, order.user_id, order.id),
       env.DB.prepare("UPDATE app_order_grants SET applied_at=CURRENT_TIMESTAMP WHERE order_id=? AND applied_at IS NULL").bind(order.id)
     ]);
     await env.DB.prepare("UPDATE app_order_grants SET expires_at=(SELECT expires_at FROM users WHERE id=?) WHERE order_id=?").bind(order.user_id, order.id).run();
@@ -1468,7 +1623,7 @@ async function enforceDeviceLimit(env, userId, currentDeviceId = null) {
 __name(enforceDeviceLimit, "enforceDeviceLimit");
 
 async function adminUserDetail(env, userId) {
-  const user = await env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,COALESCE(u.device_limit, 2) device_limit,u.dns_revision,u.token_hint,u.created_at,
+  const user = await env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,COALESCE(u.device_limit, 2) device_limit,COALESCE(u.plan_id, 'trial_1d') plan_id,u.dns_revision,u.token_hint,u.created_at,
       p.email,p.phone,p.nickname,p.remark,p.updated_at profile_updated_at,
       (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='active') dns_count
     FROM users u LEFT JOIN app_user_profiles p ON p.user_id=u.id
@@ -1494,6 +1649,7 @@ async function adminUserDetail(env, userId) {
     dnsRecords: dns.results,
     access,
     selectedNodeIds: selectedNodes.results.map((r) => r.node_id),
+    planSelectedNodeIds: (await env.DB.prepare("SELECT node_id FROM plan_selected_nodes WHERE plan_id=?").bind(normalizePlanId(user.plan_id)).all()).results.map((r) => r.node_id),
     availableNodes: availableNodes.results
   };
 }
@@ -1502,17 +1658,21 @@ __name2(adminUserDetail, "adminUserDetail");
 __name22(adminUserDetail, "adminUserDetail");
 async function adminUpdateUser(request, env, userId) {
   const input = await body(request);
-  const existing = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(userId).first();
+  const existing = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,COALESCE(device_limit,2) device_limit,COALESCE(plan_id,'trial_1d') plan_id,dns_revision FROM users WHERE id=?").bind(userId).first();
   if (!existing) return json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" }, 404);
   const name = input.name == null ? existing.name : String(input.name).trim().slice(0, 80);
   const expiresAt = input.expiresAt == null ? existing.expires_at : new Date(input.expiresAt).toISOString();
   if (!name) return json({ error: "\u7528\u6237\u540D\u4E0D\u80FD\u4E3A\u7A7A" }, 400);
   if (Number.isNaN(Date.parse(expiresAt))) return json({ error: "\u5230\u671F\u65F6\u95F4\u65E0\u6548" }, 400);
-  const nodeLimit = input.nodeLimit == null ? existing.node_limit : Math.max(1, Math.min(20, Number(input.nodeLimit || existing.node_limit)));
+  const planId = input.planId == null ? existing.plan_id : normalizePlanId(input.planId);
+  const plansList = await loadAppPlans(env);
+  const targetPlan = plansList.find((p) => p.id === planId);
+  const defaultLimitForPlan = planId !== existing.plan_id && targetPlan ? targetPlan.nodeLimit : existing.node_limit;
+  const nodeLimit = input.nodeLimit == null ? defaultLimitForPlan : Math.max(1, Math.min(20, Number(input.nodeLimit || defaultLimitForPlan)));
   const deviceLimit = input.deviceLimit == null ? (existing.device_limit ?? 2) : Math.max(1, Math.min(50, Number(input.deviceLimit || existing.device_limit || 2)));
   const status = input.status == null ? existing.status : String(input.status);
   if (!["active", "disabled", "expired"].includes(status)) return json({ error: "\u72B6\u6001\u65E0\u6548" }, 400);
-  await env.DB.prepare("UPDATE users SET name=?,expires_at=?,node_limit=?,device_limit=?,status=? WHERE id=?").bind(name, expiresAt, nodeLimit, deviceLimit, status, userId).run();
+  await env.DB.prepare("UPDATE users SET name=?,expires_at=?,node_limit=?,device_limit=?,plan_id=?,status=? WHERE id=?").bind(name, expiresAt, nodeLimit, deviceLimit, planId, status, userId).run();
   if (deviceLimit < (existing.device_limit ?? 2)) {
     await enforceDeviceLimit(env, userId);
   }
@@ -1565,13 +1725,18 @@ async function adminManageDns(request, env, userId) {
       }
     }
   }
+  if (input.planId !== void 0) {
+    const cleanPlanId = normalizePlanId(input.planId);
+    await env.DB.prepare("UPDATE users SET plan_id=? WHERE id=?").bind(cleanPlanId, userId).run();
+    user.plan_id = cleanPlanId;
+  }
   if (input.nodeLimit !== void 0) {
     await env.DB.prepare("UPDATE users SET node_limit=? WHERE id=?").bind(nodeLimit, userId).run();
     user.node_limit = nodeLimit;
   }
   let result = { created: 0, removed: 0, failed: 0 }, warning = null;
   try {
-    if (prune || before < nodeLimit) result = await provisionUser(env, user, { prune });
+    result = await provisionUser(env, user, { prune: true });
   } catch (error) {
     result.failed++;
     warning = error instanceof Error ? error.message : "DNS \u5206\u914D\u5931\u8D25";
@@ -1587,6 +1752,43 @@ async function adminManageDns(request, env, userId) {
 }
 __name(adminManageDns, "adminManageDns");
 __name2(adminManageDns, "adminManageDns");
+async function adminUpdatePlan(request, env, rawPlanId) {
+  const planId = normalizePlanId(rawPlanId);
+  const input = await body(request);
+  const plans = await loadAppPlans(env);
+  const existing = plans.find((p) => p.id === planId);
+  if (!existing) return json({ error: "\u5957\u9910\u4E0D\u5B58\u5728" }, 404);
+  const name = input.name == null ? existing.name : String(input.name).trim().slice(0, 40);
+  if (!name) return json({ error: "\u5957\u9910\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A" }, 400);
+  const amountCents = input.amountCents == null ? existing.amountCents : Math.max(0, Math.round(Number(input.amountCents)));
+  const days = input.days == null ? existing.days : Math.max(1, Math.min(3650, Math.round(Number(input.days))));
+  const nodeLimit = input.nodeLimit == null ? existing.nodeLimit : Math.max(1, Math.min(20, Math.round(Number(input.nodeLimit))));
+  const trafficGb = input.trafficGb == null ? existing.trafficGb : Math.max(1, Math.round(Number(input.trafficGb)));
+  await env.DB.prepare(`INSERT INTO app_plans(id,name,amount_cents,currency,days,node_limit,traffic_gb,sort_order,enabled,updated_at)
+    VALUES(?,?,?,?,?,?,?,?,1,CURRENT_TIMESTAMP)
+    ON CONFLICT(id) DO UPDATE SET name=excluded.name,amount_cents=excluded.amount_cents,days=excluded.days,node_limit=excluded.node_limit,traffic_gb=excluded.traffic_gb,updated_at=CURRENT_TIMESTAMP`)
+    .bind(planId, name, amountCents, existing.currency || "CNY", days, nodeLimit, trafficGb, existing.sortOrder || 0).run();
+  if (Array.isArray(input.selectedNodeIds)) {
+    const cleanIds = Array.from(new Set(input.selectedNodeIds.map(Number).filter(Number.isInteger)));
+    await env.DB.prepare("DELETE FROM plan_selected_nodes WHERE plan_id=?").bind(planId).run();
+    for (const nid of cleanIds) {
+      await env.DB.prepare("INSERT OR IGNORE INTO plan_selected_nodes(plan_id, node_id) VALUES(?,?)").bind(planId, nid).run();
+    }
+  }
+  let syncedUsers = 0;
+  if (input.syncUsers !== false) {
+    const activeUsers = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,plan_id,dns_revision FROM users WHERE status='active' AND expires_at>datetime('now') AND COALESCE(plan_id,'trial_1d')=?").bind(planId).all();
+    for (const u of activeUsers.results || []) {
+      try {
+        await provisionUser(env, u, { prune: true });
+        syncedUsers++;
+      } catch {}
+    }
+  }
+  return json({ ok: true, planId, syncedUsers });
+}
+__name(adminUpdatePlan, "adminUpdatePlan");
+
 async function api(request, env, url) {
   if (!await authorized(request, env)) return json({ error: "\u672A\u6388\u6743" }, 401);
   if (request.method === "POST" && url.pathname === "/api/maintenance/expire") {
@@ -1594,9 +1796,9 @@ async function api(request, env, url) {
   }
   if (request.method === "GET" && url.pathname === "/api/dashboard") {
     await expireUsers(env);
-    const [upstreams, users] = await Promise.all([
+    const [upstreams, users, plansList, planNodesRows, availableNodesRows] = await Promise.all([
       env.DB.prepare("SELECT id,name,enabled,last_synced_at,last_error,(SELECT COUNT(*) FROM nodes WHERE upstream_id=upstreams.id AND active=1) node_count FROM upstreams ORDER BY id DESC").all(),
-      env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,COALESCE(u.device_limit, 2) device_limit,u.token_hint,u.created_at,
+      env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,COALESCE(u.device_limit, 2) device_limit,COALESCE(u.plan_id, 'trial_1d') plan_id,u.token_hint,u.created_at,
         p.email,p.phone,p.nickname,p.remark,
         CASE WHEN u.status='active' AND strftime('%s',u.expires_at)>strftime('%s','now') THEN strftime('%s',u.expires_at)-strftime('%s','now') ELSE 0 END remaining_seconds,
         (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='active') dns_count,
@@ -1606,9 +1808,23 @@ async function api(request, env, url) {
         (SELECT status FROM app_orders WHERE user_id=u.id ORDER BY created_at DESC,id DESC LIMIT 1) last_order_status,
         (SELECT plan_id FROM app_orders WHERE user_id=u.id AND status='paid' ORDER BY updated_at DESC,id DESC LIMIT 1) paid_plan_id
         FROM users u LEFT JOIN app_user_profiles p ON p.user_id=u.id
-        ORDER BY u.id DESC LIMIT 500`).all()
+        ORDER BY u.id DESC LIMIT 500`).all(),
+      loadAppPlans(env),
+      env.DB.prepare("SELECT plan_id, node_id FROM plan_selected_nodes").all().catch(() => ({ results: [] })),
+      env.DB.prepare("SELECT n.id, n.name, n.protocol, u.name as upstream_name, u.id as upstream_id FROM nodes n JOIN upstreams u ON u.id=n.upstream_id WHERE n.active=1 AND u.enabled=1 ORDER BY u.id, n.id").all().catch(() => ({ results: [] }))
     ]);
-    return json({ upstreams: upstreams.results, users: users.results, dnsSuffix: env.DNS_SUFFIX });
+    const activeNodes = availableNodesRows.results || [];
+    const rawPlanNodes = planNodesRows.results || [];
+    const plansWithNodes = plansList.map((p) => {
+      const rawIds = rawPlanNodes.filter((r) => r.plan_id === p.id).map((r) => Number(r.node_id));
+      const userCount = (users.results || []).filter((u) => normalizePlanId(u.plan_id) === p.id).length;
+      return { ...p, selectedNodeIds: rawIds, userCount };
+    });
+    return json({ upstreams: upstreams.results, users: users.results, plans: plansWithNodes, availableNodes: activeNodes, dnsSuffix: env.DNS_SUFFIX });
+  }
+  const planManageMatch = url.pathname.match(/^\/api\/plans\/([A-Za-z0-9_-]+)$/);
+  if ((request.method === "POST" || request.method === "PATCH") && planManageMatch) {
+    return adminUpdatePlan(request, env, planManageMatch[1]);
   }
   const kickDeviceMatch = url.pathname.match(/^\/api\/users\/(\d+)\/devices\/(\d+)\/kick$/);
   if (request.method === "POST" && kickDeviceMatch) {
@@ -1684,7 +1900,8 @@ async function api(request, env, url) {
     const token = randomToken();
     const nodeLimit = Math.max(1, Math.min(20, Number(input.nodeLimit || 5)));
     const deviceLimit = Math.max(1, Math.min(50, Number(input.deviceLimit || 2)));
-    const result = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit,device_limit) VALUES(?,?,?,?,?,?,?)").bind(input.name.trim(), await hash(token), token.slice(0, 6), input.upstreamId, new Date(input.expiresAt).toISOString(), nodeLimit, deviceLimit).run();
+    const planId = normalizePlanId(input.planId || "trial_1d");
+    const result = await env.DB.prepare("INSERT INTO users(name,token_hash,token_hint,upstream_id,expires_at,node_limit,device_limit,plan_id) VALUES(?,?,?,?,?,?,?,?)").bind(input.name.trim(), await hash(token), token.slice(0, 6), input.upstreamId, new Date(input.expiresAt).toISOString(), nodeLimit, deviceLimit, planId).run();
     const userId = Number(result.meta.last_row_id);
     const selectedNodeIds = Array.from(new Set((input.selectedNodeIds || []).map(Number).filter(Number.isInteger))).slice(0, nodeLimit);
     for (const nodeId of selectedNodeIds) {
