@@ -188,7 +188,7 @@ function renderUsers(){
   $('#userRows').innerHTML=list.slice((userPage-1)*20,userPage*20).map(u=>'<tr data-user="'+u.id+'" tabindex="0" aria-selected="'+(selected===u.id)+'" class="'+(selected===u.id?'selected':'')+'"><td class="selection-cell"><input type="checkbox" data-pick="'+u.id+'" aria-label="\u67E5\u770B '+esc(u.name)+' \u7684\u8BE6\u60C5" '+(selected===u.id?'checked':'')+'></td><td><strong>'+esc(u.name)+'</strong><span class="muted">#'+u.id+'</span>'+planBadge(u.plan_id)+'<span class="mobile-expiry">'+fmt(u.expires_at)+'</span></td><td>'+badge(u)+'</td><td class="date-cell">'+fmt(u.expires_at)+'</td><td>'+Number(u.device_count||0)+'</td><td><div class="row-actions"><button class="link" data-open="'+u.id+'">\u7EED\u671F</button><button class="icon" title="\u66F4\u591A\u64CD\u4F5C" aria-label="'+esc(u.name)+' \u66F4\u591A\u64CD\u4F5C" aria-haspopup="menu" data-menu="'+u.id+'">'+I.MoreHorizontal+'</button></div></td></tr>').join('')||'<tr><td colspan="6" class="empty">\u6CA1\u6709\u7B26\u5408\u6761\u4EF6\u7684\u7528\u6237</td></tr>';
   $('#userCount').textContent='\u5171 '+list.length+' \u4F4D\u7528\u6237';$('#userPage').textContent=userPage+' / '+pages;$('#prevUsers').disabled=userPage===1;$('#nextUsers').disabled=userPage===pages;
 }
-function renderUpstreams(){$('#upRows').innerHTML=data.upstreams.map(u=>'<tr><td>'+esc(u.name)+'</td><td>'+u.node_count+'</td><td>'+fmt(u.last_synced_at)+'</td><td>'+(u.last_error?'<span class="danger">'+esc(u.last_error)+'</span>':'<span class="badge">\u6B63\u5E38</span>')+'</td><td><button data-sync="'+u.id+'">'+I.RefreshCw+'\u540C\u6B65</button></td></tr>').join('')||'<tr><td colspan="5" class="empty">\u6682\u65E0\u4E0A\u6E38\u8BA2\u9605</td></tr>'}
+function renderUpstreams(){$('#upRows').innerHTML=data.upstreams.map(u=>'<tr><td>'+esc(u.name)+'</td><td>'+u.node_count+'</td><td>'+fmt(u.last_synced_at)+'</td><td>'+(u.last_error?'<span class="danger">'+esc(u.last_error)+'</span>':'<span class="badge">\u6B63\u5E38</span>')+'</td><td><div class="row-actions"><button data-sync="'+u.id+'">'+I.RefreshCw+'\u540C\u6B65</button><button class="link danger" data-delete-upstream="'+u.id+'" data-upstream-name="'+esc(u.name)+'">\u5220\u9664</button></div></td></tr>').join('')||'<tr><td colspan="5" class="empty">\u6682\u65E0\u4E0A\u6E38\u8BA2\u9605</td></tr>'}
 function renderPlans(){
   const nodesMap=new Map((data.availableNodes||[]).map(n=>[Number(n.id),n]));
   $('#planRows').innerHTML=getPlans().map(p=>{
@@ -347,7 +347,7 @@ document.querySelector('nav').onclick=e=>{const b=e.target.closest('[data-view]'
 $('#userRows').onclick=e=>{const more=e.target.closest('[data-menu]'),row=e.target.closest('[data-user]');if(!row||busy)return;if(more){menuUser=Number(more.dataset.menu);const rect=more.getBoundingClientRect(),menu=$('#rowMenu');menu.style.left=Math.max(8,Math.min(rect.right-140,innerWidth-152))+'px';menu.style.top=Math.min(rect.bottom+5,innerHeight-108)+'px';menu.hidden=false;return}if(e.target.matches('[data-pick]')&&selected===Number(row.dataset.user)){closeDetail();return}action(()=>openUser(Number(row.dataset.user)))};$('#userRows').onkeydown=e=>{if(e.target.matches('tr')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();action(()=>openUser(Number(e.target.dataset.user)))}};
 $('#prevUsers').onclick=()=>{userPage--;renderUsers()};$('#nextUsers').onclick=()=>{userPage++;renderUsers()};$('#prevOrders').onclick=e=>action(async()=>{orderPage--;await loadOrders()},e.currentTarget);$('#nextOrders').onclick=e=>action(async()=>{orderPage++;await loadOrders()},e.currentTarget);
 $('#orderRows').onclick=e=>{const b=e.target.closest('[data-order-user]');if(b)action(async()=>{await setView('users');await openUser(Number(b.dataset.orderUser))})};
-$('#upRows').onclick=e=>{const b=e.target.closest('[data-sync]');if(b)action(async()=>{const d=await call('/api/upstreams/'+b.dataset.sync+'/sync',{method:'POST'});await load();notify('\u540C\u6B65\u5B8C\u6210\uFF1A'+d.found+' \u4E2A\u8282\u70B9')},b)};
+$('#upRows').onclick=async e=>{const del=e.target.closest('[data-delete-upstream]');if(del&&!busy){const id=del.dataset.deleteUpstream,name=del.dataset.upstreamName||'';if(!await askConfirmation('\u786E\u8BA4\u8981\u5220\u9664\u4E0A\u6E38\u300C'+name+'\u300D\u5417\uFF1F\u5220\u9664\u540E\u8BE5\u4E0A\u6E38\u4E0B\u7684\u8282\u70B9\u53CA\u5173\u8054 DNS \u5C06\u88AB\u6E05\u7406\u3002'))return;action(async()=>{await call('/api/upstreams/'+id,{method:'DELETE'});await load();notify('\u4E0A\u6E38\u300C'+name+'\u300D\u5DF2\u5220\u9664')},del);return}const b=e.target.closest('[data-sync]');if(b)action(async()=>{const d=await call('/api/upstreams/'+b.dataset.sync+'/sync',{method:'POST'});await load();notify('\u540C\u6B65\u5B8C\u6210\uFF1A'+d.found+' \u4E2A\u8282\u70B9')},b)};
 $('#newButton').onclick=()=>showEditor(view==='upstreams'?'upstream':'user');$('#closeEditor').onclick=()=>$('#editor').close();$('#cancelEditor').onclick=()=>$('#editor').close();$('#editorForm').onsubmit=saveEditor;
 $('#detail').oninput=e=>{if(e.target.id==='dayCount')preview()};$('#detail').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;if(b.hasAttribute('data-close'))return closeDetail();if(b.dataset.edit)return showEditor('edit');if(b.hasAttribute('data-days')){days=Number(b.dataset.days);renderDetail();return}if(b.dataset.detailTab){detailTab=b.dataset.detailTab;document.querySelectorAll('[data-detail-tab]').forEach(x=>x.classList.toggle('primary',x===b));renderDetailItems();return}if(b.id==='confirmRenew'){const id=selected;action(async()=>{const expiresAt=expiry();if(!await askConfirmation('\u786E\u8BA4\u7EED\u671F\u81F3 '+fmt(expiresAt)+'\uFF1F\u8282\u70B9\u989D\u5EA6\u4FDD\u6301\u4E0D\u53D8\u3002'))return;const result=await call('/api/users/'+id+'/renew',{method:'POST',body:JSON.stringify({expiresAt})});await load();await openUser(id);notify(result.failed?'\u6709\u6548\u671F\u5DF2\u66F4\u65B0\uFF0C\u4F46\u90E8\u5206 DNS \u914D\u7F6E\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5': '\u7EED\u671F\u6210\u529F',Boolean(result.failed))},b)}if(b.id==='toggleStatus'){const id=selected,disabled=detail.user.status==='disabled';action(async()=>{if(!await askConfirmation(disabled?'\u786E\u8BA4\u542F\u7528\u8BE5\u8D26\u53F7\uFF1F':'\u786E\u8BA4\u505C\u7528\u8D26\u53F7\u5E76\u79FB\u9664\u5176 DNS\uFF1F'))return;if(disabled)await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({status:'active'})});else await call('/api/users/'+id+'/disable',{method:'POST'});await load();await openUser(id);notify(disabled?'\u8D26\u53F7\u5DF2\u542F\u7528':'\u8D26\u53F7\u5DF2\u505C\u7528')},b)}};
 function clock(){$('#clock').textContent=fmt(new Date().toISOString())+'\uFF08\u4E0A\u6D77\uFF09'}clock();setInterval(clock,30000);setInterval(()=>{if(!$('#app').hidden){renderUsers();if(detail)preview()}},60000);if(key)action(load);
@@ -1893,6 +1893,48 @@ async function api(request, env, url) {
     const result = await syncUpstream(env, upstreamId);
     await reconcileUpstream(env, upstreamId);
     return json(result);
+  }
+  const deleteUpstreamMatch = url.pathname.match(/^\/api\/upstreams\/(\d+)(?:\/delete)?$/);
+  if ((request.method === "DELETE" || request.method === "POST") && deleteUpstreamMatch) {
+    const upstreamId = Number(deleteUpstreamMatch[1]);
+    const upstream = await env.DB.prepare("SELECT id, name FROM upstreams WHERE id=?").bind(upstreamId).first();
+    if (!upstream) return json({ error: "\u4E0A\u6E38\u4E0D\u5B58\u5728" }, 404);
+    const fallback = await env.DB.prepare("SELECT id FROM upstreams WHERE id!=? ORDER BY enabled DESC, id ASC LIMIT 1").bind(upstreamId).first();
+    const refUsers = await env.DB.prepare("SELECT COUNT(*) count FROM users WHERE upstream_id=?").bind(upstreamId).first();
+    if (Number(refUsers?.count || 0) > 0 && !fallback) {
+      return json({ error: "\u8BE5\u4E0A\u6E38\u662F\u5F53\u524D\u552F\u4E00\u4E0A\u6E38\u4E14\u4ECD\u6709\u5173\u8054\u7528\u6237\uFF0C\u8BF7\u5148\u6DFB\u52A0\u5176\u4ED6\u4E0A\u6E38\u540E\u518D\u5220\u9664" }, 409);
+    }
+    const activeDnsRows = await env.DB.prepare(`SELECT d.id, d.user_id, d.cloudflare_record_id, d.zone_id
+      FROM user_dns_records d JOIN nodes n ON n.id = d.node_id
+      WHERE n.upstream_id = ? AND d.status = 'active'`).bind(upstreamId).all();
+    const affectedUserIds = new Set();
+    let removedDns = 0;
+    for (const row of activeDnsRows.results || []) {
+      affectedUserIds.add(Number(row.user_id));
+      try {
+        await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
+        removedDns++;
+      } catch {}
+    }
+    if (fallback) {
+      const directUsers = await env.DB.prepare("SELECT id FROM users WHERE upstream_id=? AND status='active' AND expires_at>datetime('now')").bind(upstreamId).all();
+      for (const u of directUsers.results || []) affectedUserIds.add(Number(u.id));
+      await env.DB.prepare("UPDATE users SET upstream_id=? WHERE upstream_id=?").bind(fallback.id, upstreamId).run();
+    }
+    await env.DB.batch([
+      env.DB.prepare("DELETE FROM user_selected_nodes WHERE node_id IN (SELECT id FROM nodes WHERE upstream_id=?)").bind(upstreamId),
+      env.DB.prepare("DELETE FROM plan_selected_nodes WHERE node_id IN (SELECT id FROM nodes WHERE upstream_id=?)").bind(upstreamId),
+      env.DB.prepare("DELETE FROM user_dns_records WHERE node_id IN (SELECT id FROM nodes WHERE upstream_id=?)").bind(upstreamId),
+      env.DB.prepare("DELETE FROM nodes WHERE upstream_id=?").bind(upstreamId),
+      env.DB.prepare("DELETE FROM upstreams WHERE id=?").bind(upstreamId)
+    ]);
+    for (const uid of affectedUserIds) {
+      try {
+        const u = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,plan_id,dns_revision FROM users WHERE id=? AND status='active' AND expires_at>datetime('now')").bind(uid).first();
+        if (u) await provisionUser(env, u, { prune: true });
+      } catch {}
+    }
+    return json({ ok: true, removedDns });
   }
   if (request.method === "POST" && url.pathname === "/api/users") {
     const input = await body(request);
