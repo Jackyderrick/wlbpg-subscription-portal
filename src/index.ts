@@ -227,7 +227,7 @@ async function loadOrders(){const d=await call('/api/admin/orders?page='+orderPa
 async function setView(next){view=next;closeDetail();document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));['users','plans','upstreams','orders','settings'].forEach(v=>$('#'+v+'View').hidden=v!==view);const titles={users:['\u7528\u6237\u7BA1\u7406','\u7BA1\u7406\u7528\u6237\u3001\u6709\u6548\u671F\u4E0E\u5206\u4EAB\u6743\u9650'],plans:['\u5957\u9910\u7BA1\u7406','\u7EDF\u4E00\u4E3A\u300C\u4F53\u9A8C / \u57FA\u7840 / \u9AD8\u7EA7 / \u5BB6\u5BBD\u300D\u5957\u9910\u6307\u5B9A\u4E13\u5C5E\u8282\u70B9\u6C60'],upstreams:['\u4E0A\u6E38\u8BA2\u9605','\u8BA2\u9605\u6765\u6E90\u4E0E\u8282\u70B9\u540C\u6B65'],orders:['\u8BA2\u5355\u8BB0\u5F55','\u652F\u4ED8\u8BA2\u5355\u4E0E\u4F1A\u5458\u5957\u9910'],settings:['\u7CFB\u7EDF\u8BBE\u7F6E','\u5F53\u524D\u670D\u52A1\u4E0E\u7BA1\u7406\u5458\u4F1A\u8BDD']};$('#pageTitle').textContent=titles[view][0];$('#pageSubtitle').textContent=titles[view][1];$('#newButton').hidden=!['users','upstreams'].includes(view);$('#newButton span').textContent=view==='upstreams'?'\u6DFB\u52A0\u4E0A\u6E38':'\u65B0\u5EFA\u7528\u6237';if(view==='orders')await loadOrders()}
 function field(label,name,value='',type='text',required=false){return '<label>'+label+'<input name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(required?'required':'')+'></label>'}
 function showEditor(mode){editorMode=mode;$('#formError').hidden=true;$('#createdLink').hidden=true;$('#editorForm').hidden=false;$('#editorTitle').textContent=mode==='user'?'\u65B0\u5EFA\u7528\u6237':mode==='upstream'?'\u6DFB\u52A0\u4E0A\u6E38':'\u7F16\u8F91\u7528\u6237';let html='';if(mode==='user'){html=field('\u7528\u6237\u540D','name','','text',true)+'<label>\u6240\u5C5E\u5957\u9910<select name="planId" required>'+getPlans().map(p=>'<option value="'+esc(p.id)+'">'+esc(p.name)+'</option>').join('')+'</select></label><label>\u4E0A\u6E38<select name="upstreamId" required>'+data.upstreams.map(u=>'<option value="'+u.id+'">'+esc(u.name)+'</option>').join('')+'</select></label>'+field('\u6709\u6548\u671F\u81F3\uFF08\u672C\u5730\u65F6\u95F4\uFF09','expiresAt','','datetime-local',true)+'<label>\u8282\u70B9\u989D\u5EA6<input name="nodeLimit" type="number" min="1" max="20" value="5" required></label><label>\u8BBE\u5907\u6570\u91CF\u4E0A\u9650<input name="deviceLimit" type="number" min="1" max="50" value="2" required></label>'}else if(mode==='upstream'){html=field('\u540D\u79F0','name','','text',true)+'<label class="full">\u8BA2\u9605\u5730\u5740 \u6216 \u8282\u70B9\u94FE\u63A5 (vless / trojan / vmess / ss)<textarea name="subscriptionUrl" rows="4" placeholder="\u652F\u6301\u8F93\u5165 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u8282\u70B9\u94FE\u63A5 (vless/trojan/vmess/ss\uFF0C\u652F\u6301 Base64)" required style="margin-top:7px;width:100%"></textarea></label>'}else{const u=detail.user,p=detail.profile,curPlan=normPlan(u.plan_id);html=field('\u7528\u6237\u540D','name',u.name,'text',true)+'<label>\u6240\u5C5E\u5957\u9910<select name="planId">'+getPlans().map(pl=>'<option value="'+esc(pl.id)+'" '+(pl.id===curPlan?'selected':'')+'>'+esc(pl.name)+'</option>').join('')+'</select></label>'+field('\u90AE\u7BB1','email',p.email||'','email')+field('\u624B\u673A\u53F7','phone',p.phone||'')+field('\u6635\u79F0','nickname',p.nickname||'')+'<label>\u8BBE\u5907\u6570\u91CF\u4E0A\u9650<input name="deviceLimit" type="number" min="1" max="50" step="1" value="'+(u.device_limit||2)+'" required></label><label class="full">\u5907\u6CE8<textarea name="remark" rows="3">'+esc(p.remark||'')+'</textarea></label>'}$('#editorFields').innerHTML=html;$('#editor').showModal()}
-async function saveEditor(e){e.preventDefault();if(busy)return;busy=true;$('#saveEditor').disabled=true;try{const f=Object.fromEntries(new FormData(e.target));if(editorMode==='user'){const d=await call('/api/users',{method:'POST',body:JSON.stringify({...f,upstreamId:Number(f.upstreamId),nodeLimit:Number(f.nodeLimit),deviceLimit:Number(f.deviceLimit||2),expiresAt:new Date(f.expiresAt).toISOString()})});await load();$('#editorForm').hidden=true;$('#createdLink').hidden=false;$('#createdLink').textContent='\u8BA2\u9605\u5730\u5740\uFF08\u4EC5\u663E\u793A\u672C\u6B21\uFF09\uFF1A'+d.subscriptionUrl}else if(editorMode==='upstream'){const raw=f.subscriptionUrl.trim();if(!raw)throw new Error('\u8BF7\u8F93\u5165\u8BA2\u9605\u5730\u5740\u6216\u8282\u70B9\u94FE\u63A5');const isHttp=raw.startsWith('http://')||raw.startsWith('https://'),isNode=['vless://','vmess://','trojan://','ss://'].some(p=>raw.includes(p));if(!isHttp&&!isNode&&raw.length<20)throw new Error('\u8BF7\u8F93\u5165\u6709\u6548\u7684 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u4EE5 vless/vmess/trojan/ss \u5F00\u5934\u7684\u8282\u70B9\u94FE\u63A5');const res=await call('/api/upstreams',{method:'POST',body:JSON.stringify({name:f.name.trim(),subscriptionUrl:raw})});await load();$('#editor').close();if(res.importedNodes){notify('\u5DF2\u76F4\u63A5\u5F55\u5165 '+res.importedNodes+' \u4E2A\u8282\u70B9');return}}else{const id=selected;await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({name:f.name,planId:f.planId,deviceLimit:Number(f.deviceLimit||2),profile:{email:f.email,phone:f.phone,nickname:f.nickname,remark:f.remark}})});await load();await openUser(id);$('#editor').close()}notify('\u4FDD\u5B58\u6210\u529F')}catch(err){$('#formError').textContent=err.message;$('#formError').hidden=false}finally{busy=false;$('#saveEditor').disabled=false}}
+async function saveEditor(e){e.preventDefault();if(busy)return;busy=true;$('#saveEditor').disabled=true;try{const f=Object.fromEntries(new FormData(e.target));if(editorMode==='user'){const d=await call('/api/users',{method:'POST',body:JSON.stringify({...f,upstreamId:Number(f.upstreamId),nodeLimit:Number(f.nodeLimit),deviceLimit:Number(f.deviceLimit||2),expiresAt:new Date(f.expiresAt).toISOString()})});await load();$('#editorForm').hidden=true;$('#createdLink').hidden=false;$('#createdLink').textContent='\u8BA2\u9605\u5730\u5740\uFF08\u4EC5\u663E\u793A\u672C\u6B21\uFF09\uFF1A'+d.subscriptionUrl}else if(editorMode==='upstream'){const raw=f.subscriptionUrl.trim();if(!raw)throw new Error('\u8BF7\u8F93\u5165\u8BA2\u9605\u5730\u5740\u6216\u8282\u70B9\u94FE\u63A5');const isHttp=raw.startsWith('http://')||raw.startsWith('https://'),isNode=['vless://','vmess://','trojan://','ss://','hysteria2://','hy2://','tuic://','anytls://'].some(p=>raw.includes(p));if(!isHttp&&!isNode&&raw.length<20)throw new Error('\u8BF7\u8F93\u5165\u6709\u6548\u7684 HTTPS \u8BA2\u9605\u5730\u5740\uFF0C\u6216\u7C98\u8D34\u4EE5 vless/vmess/trojan/ss \u5F00\u5934\u7684\u8282\u70B9\u94FE\u63A5');const res=await call('/api/upstreams',{method:'POST',body:JSON.stringify({name:f.name.trim(),subscriptionUrl:raw})});await load();$('#editor').close();if(res.importedNodes){notify('\u5DF2\u76F4\u63A5\u5F55\u5165 '+res.importedNodes+' \u4E2A\u8282\u70B9');return}}else{const id=selected;await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({name:f.name,planId:f.planId,deviceLimit:Number(f.deviceLimit||2),profile:{email:f.email,phone:f.phone,nickname:f.nickname,remark:f.remark}})});await load();await openUser(id);$('#editor').close()}notify('\u4FDD\u5B58\u6210\u529F')}catch(err){$('#formError').textContent=err.message;$('#formError').hidden=false}finally{busy=false;$('#saveEditor').disabled=false}}
 function showDnsEditor(){
   $('#dnsUser').textContent=detail.user.name+' (#'+detail.user.id+')';
   $('#dnsCounts').textContent=Number(detail.user.dns_count||0)+' / '+detail.user.node_limit;
@@ -301,9 +301,15 @@ $('#planForm').onsubmit=async e=>{
     const syncUsers=$('#planSyncUsers').checked;
     const selectedNodeIds=Array.from(document.querySelectorAll('#planNodeList input[type="checkbox"]:checked')).map(cb=>Number(cb.value));
     const res=await call('/api/plans/'+planId,{method:'POST',body:JSON.stringify({name,amountCents,days,nodeLimit,selectedNodeIds,syncUsers})});
+    let totalSynced=Number(res.syncedUsers||0);
+    if(Array.isArray(res.pendingUserIds)&&res.pendingUserIds.length){
+      for(const uid of res.pendingUserIds){
+        try{await call('/api/users/'+uid+'/dns',{method:'POST',body:JSON.stringify({})});totalSynced++;}catch{}
+      }
+    }
     await load();
     $('#planEditor').close();
-    notify('\u5957\u9910\u300C'+name+'\u300D\u5DF2\u4FDD\u5B58\uFF08\u5DF2\u6307\u5B9A '+selectedNodeIds.length+' \u4E2A\u8282\u70B9'+(syncUsers?'\uFF0C\u540C\u6B65\u66F4\u65B0 '+res.syncedUsers+' \u4F4D\u7528\u6237':'')+'\uFF09');
+    notify('\u5957\u9910\u300C'+name+'\u300D\u5DF2\u4FDD\u5B58\uFF08\u5DF2\u6307\u5B9A '+selectedNodeIds.length+' \u4E2A\u8282\u70B9'+(syncUsers?'\uFF0C\u540C\u6B65\u66F4\u65B0 '+totalSynced+' \u4F4D\u7528\u6237':'')+'\uFF09');
   }catch(err){
     $('#planError').textContent=err.message;$('#planError').hidden=false;
   }finally{
@@ -347,7 +353,7 @@ document.querySelector('nav').onclick=e=>{const b=e.target.closest('[data-view]'
 $('#userRows').onclick=e=>{const more=e.target.closest('[data-menu]'),row=e.target.closest('[data-user]');if(!row||busy)return;if(more){menuUser=Number(more.dataset.menu);const rect=more.getBoundingClientRect(),menu=$('#rowMenu');menu.style.left=Math.max(8,Math.min(rect.right-140,innerWidth-152))+'px';menu.style.top=Math.min(rect.bottom+5,innerHeight-108)+'px';menu.hidden=false;return}if(e.target.matches('[data-pick]')&&selected===Number(row.dataset.user)){closeDetail();return}action(()=>openUser(Number(row.dataset.user)))};$('#userRows').onkeydown=e=>{if(e.target.matches('tr')&&(e.key==='Enter'||e.key===' ')){e.preventDefault();action(()=>openUser(Number(e.target.dataset.user)))}};
 $('#prevUsers').onclick=()=>{userPage--;renderUsers()};$('#nextUsers').onclick=()=>{userPage++;renderUsers()};$('#prevOrders').onclick=e=>action(async()=>{orderPage--;await loadOrders()},e.currentTarget);$('#nextOrders').onclick=e=>action(async()=>{orderPage++;await loadOrders()},e.currentTarget);
 $('#orderRows').onclick=e=>{const b=e.target.closest('[data-order-user]');if(b)action(async()=>{await setView('users');await openUser(Number(b.dataset.orderUser))})};
-$('#upRows').onclick=async e=>{const del=e.target.closest('[data-delete-upstream]');if(del&&!busy){const id=del.dataset.deleteUpstream,name=del.dataset.upstreamName||'';if(!await askConfirmation('\u786E\u8BA4\u8981\u5220\u9664\u4E0A\u6E38\u300C'+name+'\u300D\u5417\uFF1F\u5220\u9664\u540E\u8BE5\u4E0A\u6E38\u4E0B\u7684\u8282\u70B9\u53CA\u5173\u8054 DNS \u5C06\u88AB\u6E05\u7406\u3002'))return;action(async()=>{await call('/api/upstreams/'+id,{method:'DELETE'});await load();notify('\u4E0A\u6E38\u300C'+name+'\u300D\u5DF2\u5220\u9664')},del);return}const b=e.target.closest('[data-sync]');if(b)action(async()=>{const d=await call('/api/upstreams/'+b.dataset.sync+'/sync',{method:'POST'});await load();notify('\u540C\u6B65\u5B8C\u6210\uFF1A'+d.found+' \u4E2A\u8282\u70B9')},b)};
+$('#upRows').onclick=async e=>{const del=e.target.closest('[data-delete-upstream]');if(del&&!busy){const id=del.dataset.deleteUpstream,name=del.dataset.upstreamName||'';if(!await askConfirmation('\u786E\u8BA4\u8981\u5220\u9664\u4E0A\u6E38\u300C'+name+'\u300D\u5417\uFF1F\u5220\u9664\u540E\u8BE5\u4E0A\u6E38\u4E0B\u7684\u8282\u70B9\u53CA\u5173\u8054 DNS \u5C06\u88AB\u6E05\u7406\u3002'))return;action(async()=>{const res=await call('/api/upstreams/'+id,{method:'DELETE'});if(Array.isArray(res.pendingUserIds)){for(const uid of res.pendingUserIds){try{await call('/api/users/'+uid+'/dns',{method:'POST',body:JSON.stringify({})})}catch{}}}await load();notify('\u4E0A\u6E38\u300C'+name+'\u300D\u5DF2\u5220\u9664\u5E76\u8865\u9F50\u7528\u6237 DNS')},del);return}const b=e.target.closest('[data-sync]');if(b)action(async()=>{const d=await call('/api/upstreams/'+b.dataset.sync+'/sync',{method:'POST'});await load();notify('\u540C\u6B65\u5B8C\u6210\uFF1A'+d.found+' \u4E2A\u8282\u70B9')},b)};
 $('#newButton').onclick=()=>showEditor(view==='upstreams'?'upstream':'user');$('#closeEditor').onclick=()=>$('#editor').close();$('#cancelEditor').onclick=()=>$('#editor').close();$('#editorForm').onsubmit=saveEditor;
 $('#detail').oninput=e=>{if(e.target.id==='dayCount')preview()};$('#detail').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;if(b.hasAttribute('data-close'))return closeDetail();if(b.dataset.edit)return showEditor('edit');if(b.hasAttribute('data-days')){days=Number(b.dataset.days);renderDetail();return}if(b.dataset.detailTab){detailTab=b.dataset.detailTab;document.querySelectorAll('[data-detail-tab]').forEach(x=>x.classList.toggle('primary',x===b));renderDetailItems();return}if(b.id==='confirmRenew'){const id=selected;action(async()=>{const expiresAt=expiry();if(!await askConfirmation('\u786E\u8BA4\u7EED\u671F\u81F3 '+fmt(expiresAt)+'\uFF1F\u8282\u70B9\u989D\u5EA6\u4FDD\u6301\u4E0D\u53D8\u3002'))return;const result=await call('/api/users/'+id+'/renew',{method:'POST',body:JSON.stringify({expiresAt})});await load();await openUser(id);notify(result.failed?'\u6709\u6548\u671F\u5DF2\u66F4\u65B0\uFF0C\u4F46\u90E8\u5206 DNS \u914D\u7F6E\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5': '\u7EED\u671F\u6210\u529F',Boolean(result.failed))},b)}if(b.id==='toggleStatus'){const id=selected,disabled=detail.user.status==='disabled';action(async()=>{if(!await askConfirmation(disabled?'\u786E\u8BA4\u542F\u7528\u8BE5\u8D26\u53F7\uFF1F':'\u786E\u8BA4\u505C\u7528\u8D26\u53F7\u5E76\u79FB\u9664\u5176 DNS\uFF1F'))return;if(disabled)await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({status:'active'})});else await call('/api/users/'+id+'/disable',{method:'POST'});await load();await openUser(id);notify(disabled?'\u8D26\u53F7\u5DF2\u542F\u7528':'\u8D26\u53F7\u5DF2\u505C\u7528')},b)}};
 function clock(){$('#clock').textContent=fmt(new Date().toISOString())+'\uFF08\u4E0A\u6D77\uFF09'}clock();setInterval(clock,30000);setInterval(()=>{if(!$('#app').hidden){renderUsers();if(detail)preview()}},60000);if(key)action(load);
@@ -379,12 +385,13 @@ async function sha256(value) {
 __name(sha256, "sha256");
 __name2(sha256, "sha256");
 __name22(sha256, "sha256");
+var INFO_NODE_NAME_REGEX = /(\u5269\u4F59\u6D41\u91CF|\u8DDD\u79BB\u4E0B\u6B21\u91CD\u7F6E|\u5957\u9910\u5230\u671F|\u5BFC\u822A\u9875|\u5B98\u7F51\u5730\u5740|\u6700\u65B0\u5B98\u7F51|\u9632\u6B62\u5931\u8054|\u8FC7\u671F\u65F6\u95F4|\u6D41\u91CF\u5269\u4F59)/i;
 function subscriptionText(input) {
   const trimmed = input.trim();
-  if (/^(vless|vmess|trojan|ss):\/\//m.test(trimmed)) return trimmed;
+  if (/^(vless|vmess|trojan|ss|hysteria2|hy2|tuic|anytls):\/\//m.test(trimmed)) return trimmed;
   try {
     const decoded = b64decode(trimmed);
-    return /^(vless|vmess|trojan|ss):\/\//m.test(decoded) ? decoded : trimmed;
+    return /^(vless|vmess|trojan|ss|hysteria2|hy2|tuic|anytls):\/\//m.test(decoded) ? decoded : trimmed;
   } catch {
     return trimmed;
   }
@@ -413,17 +420,21 @@ async function parseSubscription(input) {
         const json2 = JSON.parse(b64decode(originalUri.slice(8)));
         const server2 = String(json2.add ?? "");
         if (!server2) continue;
-        const stable2 = `vmess|${server2}|${String(json2.port ?? "")}|${String(json2.id ?? "")}`;
-        result.push({ fingerprint: (await sha256(stable2)).slice(0, 24), name: String(json2.ps ?? server2), protocol: "vmess", server: server2, originalUri });
+        const name2 = String(json2.ps ?? server2);
+        if (INFO_NODE_NAME_REGEX.test(name2)) continue;
+        const stable2 = `vmess|${server2}|${String(json2.port ?? "")}|${String(json2.id ?? "")}|${String(json2.path ?? "")}|${String(json2.host ?? "")}`;
+        result.push({ fingerprint: (await sha256(stable2)).slice(0, 24), name: name2, protocol: "vmess", server: server2, originalUri });
         continue;
       }
-      const protocol = originalUri.split(":", 1)[0];
-      if (!["vless", "trojan", "ss"].includes(protocol)) continue;
+      const protocol = originalUri.split(":", 1)[0].toLowerCase();
+      if (!["vless", "trojan", "ss", "hysteria2", "hy2", "tuic", "anytls"].includes(protocol)) continue;
       const url = new URL(originalUri);
       const server = url.hostname;
       if (!server) continue;
-      const stable = `${protocol}|${server}|${url.port}|${url.username}`;
-      result.push({ fingerprint: (await sha256(stable)).slice(0, 24), name: displayName(originalUri, server), protocol, server, originalUri });
+      const name = displayName(originalUri, server);
+      if (INFO_NODE_NAME_REGEX.test(name)) continue;
+      const stable = `${protocol}|${server}|${url.port}|${url.username}|${url.search}`;
+      result.push({ fingerprint: (await sha256(stable)).slice(0, 24), name, protocol, server, originalUri });
     } catch {
     }
   }
@@ -449,11 +460,26 @@ __name22(connectionIdentity, "connectionIdentity");
 function rewriteNode(originalUri, protocol, hostname, name) {
   if (protocol === "vmess") {
     const json2 = JSON.parse(b64decode(originalUri.slice(8)));
+    const origHost = String(json2.add ?? "");
+    if (origHost && dnsType(origHost) === "CNAME" && !json2.sni && !json2.host) {
+      json2.sni = origHost;
+    }
     json2.add = hostname;
     if (name) json2.ps = name;
     return `vmess://${b64encode(JSON.stringify(json2))}`;
   }
   const url = new URL(originalUri);
+  const origHost = url.hostname;
+  if (
+    origHost &&
+    dnsType(origHost) === "CNAME" &&
+    ["vless", "trojan", "hysteria2", "hy2", "tuic", "anytls"].includes(String(protocol || "").toLowerCase()) &&
+    !url.searchParams.get("sni") &&
+    !url.searchParams.get("servername") &&
+    !url.searchParams.get("peer")
+  ) {
+    url.searchParams.set("sni", origHost);
+  }
   url.hostname = hostname;
   if (name) url.hash = name;
   return url.toString();
@@ -862,34 +888,61 @@ __name(localizedNodeName, "localizedNodeName");
 __name2(localizedNodeName, "localizedNodeName");
 __name22(localizedNodeName, "localizedNodeName");
 async function cfDns(env, zoneId, method, path = "", payload) {
+  env.__subrequests = (env.__subrequests || 0) + 1;
   const response = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records${path}`, {
     method,
     headers: { authorization: `Bearer ${env.CF_API_TOKEN}`, "content-type": "application/json" },
     body: payload === void 0 ? void 0 : JSON.stringify(payload)
   });
   const result = await response.json();
-  if (!response.ok || result.success !== true) throw new Error(`Cloudflare DNS \u8BF7\u6C42\u5931\u8D25\uFF1A${JSON.stringify(result.errors ?? response.status)}`);
+  if (!response.ok || result.success !== true) {
+    const err = new Error(`Cloudflare DNS \u8BF7\u6C42\u5931\u8D25\uFF1A${JSON.stringify(result.errors ?? response.status)}`);
+    err.cfErrors = result.errors || [];
+    err.httpStatus = response.status;
+    throw err;
+  }
   return result;
 }
 __name(cfDns, "cfDns");
 __name2(cfDns, "cfDns");
 __name22(cfDns, "cfDns");
 async function createDns(env, pool, hostname, server) {
-  const result = await cfDns(env, pool.zoneId, "POST", "", { type: dnsType(server), name: hostname, content: server, ttl: 60, proxied: false, comment: "dns-sub-share managed" });
-  return String(result.result?.id ?? "");
+  const recordBody = { type: dnsType(server), name: hostname, content: server, ttl: 60, proxied: false, comment: "dns-sub-share managed" };
+  try {
+    const result = await cfDns(env, pool.zoneId, "POST", "", recordBody);
+    return String(result.result?.id ?? "");
+  } catch (err) {
+    const codes = (err.cfErrors || []).map((e) => Number(e.code));
+    if (codes.includes(81053) || codes.includes(81057) || codes.includes(81058)) {
+      const list = await cfDns(env, pool.zoneId, "GET", `?name=${encodeURIComponent(hostname)}`);
+      const existing = list.result?.[0];
+      if (existing?.id) {
+        await cfDns(env, pool.zoneId, "PATCH", `/${existing.id}`, recordBody);
+        return String(existing.id);
+      }
+    }
+    throw err;
+  }
 }
 __name(createDns, "createDns");
 __name2(createDns, "createDns");
 __name22(createDns, "createDns");
 async function deleteDns(env, zoneId, recordId) {
-  if (recordId) await cfDns(env, zoneId, "DELETE", `/${recordId}`);
+  if (!recordId) return;
+  try {
+    await cfDns(env, zoneId, "DELETE", `/${recordId}`);
+  } catch (err) {
+    const codes = (err.cfErrors || []).map((e) => Number(e.code));
+    if (err.httpStatus === 404 || codes.includes(81044)) return;
+    throw err;
+  }
 }
 __name(deleteDns, "deleteDns");
 __name2(deleteDns, "deleteDns");
 __name22(deleteDns, "deleteDns");
 async function pickDnsPool(env) {
   const pools = dnsPools(env);
-  const usage = await env.DB.prepare("SELECT COALESCE(zone_id, ?) zone_id, COUNT(*) total FROM user_dns_records WHERE status IN ('active','error','pending') GROUP BY COALESCE(zone_id, ?)").bind(env.CF_ZONE_ID, env.CF_ZONE_ID).all();
+  const usage = await env.DB.prepare("SELECT COALESCE(zone_id, ?) zone_id, COUNT(*) total FROM user_dns_records WHERE status='active' GROUP BY COALESCE(zone_id, ?)").bind(env.CF_ZONE_ID, env.CF_ZONE_ID).all();
   const counts = new Map(usage.results.map((row) => [row.zone_id, Number(row.total)]));
   const available = pools.filter((pool) => (counts.get(pool.zoneId) || 0) < pool.maxRecords);
   if (!available.length) throw new Error("\u6240\u6709\u8282\u70B9\u57DF\u540D\u6C60\u5747\u5DF2\u8FBE\u5230\u5BB9\u91CF\u4E0A\u9650");
@@ -1031,6 +1084,16 @@ async function provisionUser(env, user, { prune = true } = {}) {
       WHERE n_sel.id IN (${rawAllowedIds.map(() => "?").join(",")}) AND n_act.active = 1`).bind(...rawAllowedIds).all();
     allowedIds = (resolved.results || []).map((r) => Number(r.id));
   }
+  const errorRows = await env.DB.prepare("SELECT id,node_id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='error'").bind(user.id).all();
+  for (const erow of errorRows.results || []) {
+    if ((env.__subrequests || 0) >= 38) break;
+    try {
+      if (erow.cloudflare_record_id) {
+        await deleteDns(env, erow.zone_id || env.CF_ZONE_ID, erow.cloudflare_record_id);
+      }
+      await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE id=?").bind(erow.id).run();
+    } catch {}
+  }
   const activeRows = await env.DB.prepare("SELECT id,node_id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='active' ORDER BY created_at,id").bind(user.id).all();
   let active = activeRows.results || [];
   let disallowedRemoved = 0, disallowedFailed = 0;
@@ -1038,6 +1101,10 @@ async function provisionUser(env, user, { prune = true } = {}) {
     const kept = [];
     for (const row of active) {
       if (!allowedIds.includes(Number(row.node_id))) {
+        if ((env.__subrequests || 0) >= 38) {
+          kept.push(row);
+          continue;
+        }
         try {
           await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
           await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE id=?").bind(row.id).run();
@@ -1776,16 +1843,23 @@ async function adminUpdatePlan(request, env, rawPlanId) {
     }
   }
   let syncedUsers = 0;
+  const pendingUserIds = [];
   if (input.syncUsers !== false) {
     const activeUsers = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,plan_id,dns_revision FROM users WHERE status='active' AND expires_at>datetime('now') AND COALESCE(plan_id,'trial_1d')=?").bind(planId).all();
     for (const u of activeUsers.results || []) {
+      if ((env.__subrequests || 0) >= 25) {
+        pendingUserIds.push(u.id);
+        continue;
+      }
       try {
         await provisionUser(env, u, { prune: true });
         syncedUsers++;
-      } catch {}
+      } catch {
+        pendingUserIds.push(u.id);
+      }
     }
   }
-  return json({ ok: true, planId, syncedUsers });
+  return json({ ok: true, planId, syncedUsers, pendingUserIds });
 }
 __name(adminUpdatePlan, "adminUpdatePlan");
 
@@ -1802,6 +1876,7 @@ async function api(request, env, url) {
         p.email,p.phone,p.nickname,p.remark,
         CASE WHEN u.status='active' AND strftime('%s',u.expires_at)>strftime('%s','now') THEN strftime('%s',u.expires_at)-strftime('%s','now') ELSE 0 END remaining_seconds,
         (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='active') dns_count,
+        (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='error') error_dns_count,
         (SELECT COUNT(*) FROM app_devices WHERE user_id=u.id) device_count,
         (SELECT MAX(last_seen_at) FROM app_devices WHERE user_id=u.id) last_seen_at,
         (SELECT COUNT(*) FROM app_orders WHERE user_id=u.id) order_count,
@@ -1911,10 +1986,12 @@ async function api(request, env, url) {
     let removedDns = 0;
     for (const row of activeDnsRows.results || []) {
       affectedUserIds.add(Number(row.user_id));
-      try {
-        await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
-        removedDns++;
-      } catch {}
+      if ((env.__subrequests || 0) < 30) {
+        try {
+          await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
+          removedDns++;
+        } catch {}
+      }
     }
     if (fallback) {
       const directUsers = await env.DB.prepare("SELECT id FROM users WHERE upstream_id=? AND status='active' AND expires_at>datetime('now')").bind(upstreamId).all();
@@ -1928,13 +2005,20 @@ async function api(request, env, url) {
       env.DB.prepare("DELETE FROM nodes WHERE upstream_id=?").bind(upstreamId),
       env.DB.prepare("DELETE FROM upstreams WHERE id=?").bind(upstreamId)
     ]);
+    const pendingUserIds = [];
     for (const uid of affectedUserIds) {
+      if ((env.__subrequests || 0) >= 28) {
+        pendingUserIds.push(uid);
+        continue;
+      }
       try {
         const u = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,plan_id,dns_revision FROM users WHERE id=? AND status='active' AND expires_at>datetime('now')").bind(uid).first();
         if (u) await provisionUser(env, u, { prune: true });
-      } catch {}
+      } catch {
+        pendingUserIds.push(uid);
+      }
     }
-    return json({ ok: true, removedDns });
+    return json({ ok: true, removedDns, pendingUserIds });
   }
   if (request.method === "POST" && url.pathname === "/api/users") {
     const input = await body(request);
@@ -2092,6 +2176,7 @@ async function appcastResponse(request) {
 __name(appcastResponse, "appcastResponse");
 var index_default = {
   async fetch(request, env) {
+    env.__subrequests = 0;
     try {
       const url = new URL(request.url);
       if (url.pathname === "/appcast.xml") return appcastResponse(request);

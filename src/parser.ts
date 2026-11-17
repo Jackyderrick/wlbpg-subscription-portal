@@ -1,12 +1,16 @@
 export type ParsedNode = {
   fingerprint: string;
   name: string;
-  protocol: "vless" | "vmess" | "trojan" | "ss";
+  protocol: "vless" | "vmess" | "trojan" | "ss" | "hysteria2" | "hy2" | "tuic" | "anytls";
   server: string;
   originalUri: string;
 };
 
 const encoder = new TextEncoder();
+
+const SUPPORTED_PROTOCOLS = ["vless", "vmess", "trojan", "ss", "hysteria2", "hy2", "tuic", "anytls"];
+const PROTO_REGEX = /^(vless|vmess|trojan|ss|hysteria2|hy2|tuic|anytls):\/\//m;
+const INFO_NODE_NAME_REGEX = /(剩余流量|距离下次重置|套餐到期|导航页|官网地址|最新官网|防止失联|过期时间|流量剩余)/i;
 
 function b64decode(value: string): string {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
@@ -28,10 +32,10 @@ async function sha256(value: string): Promise<string> {
 
 function subscriptionText(input: string): string {
   const trimmed = input.trim();
-  if (/^(vless|vmess|trojan|ss):\/\//m.test(trimmed)) return trimmed;
+  if (PROTO_REGEX.test(trimmed)) return trimmed;
   try {
     const decoded = b64decode(trimmed);
-    return /^(vless|vmess|trojan|ss):\/\//m.test(decoded) ? decoded : trimmed;
+    return PROTO_REGEX.test(decoded) ? decoded : trimmed;
   } catch {
     return trimmed;
   }
@@ -52,17 +56,21 @@ export async function parseSubscription(input: string): Promise<ParsedNode[]> {
         const json = JSON.parse(b64decode(originalUri.slice(8))) as Record<string, unknown>;
         const server = String(json.add ?? "");
         if (!server) continue;
-        const stable = `vmess|${server}|${String(json.port ?? "")}|${String(json.id ?? "")}`;
-        result.push({ fingerprint: (await sha256(stable)).slice(0, 24), name: String(json.ps ?? server), protocol: "vmess", server, originalUri });
+        const name = String(json.ps ?? server);
+        if (INFO_NODE_NAME_REGEX.test(name)) continue;
+        const stable = `vmess|${server}|${String(json.port ?? "")}|${String(json.id ?? "")}|${String(json.path ?? "")}|${String(json.host ?? "")}`;
+        result.push({ fingerprint: (await sha256(stable)).slice(0, 24), name, protocol: "vmess", server, originalUri });
         continue;
       }
-      const protocol = originalUri.split(":", 1)[0] as ParsedNode["protocol"];
-      if (!(["vless", "trojan", "ss"] as string[]).includes(protocol)) continue;
+      const protocol = originalUri.split(":", 1)[0].toLowerCase() as ParsedNode["protocol"];
+      if (!SUPPORTED_PROTOCOLS.includes(protocol)) continue;
       const url = new URL(originalUri);
       const server = url.hostname;
       if (!server) continue;
-      const stable = `${protocol}|${server}|${url.port}|${url.username}`;
-      result.push({ fingerprint: (await sha256(stable)).slice(0, 24), name: displayName(originalUri, server), protocol, server, originalUri });
+      const name = displayName(originalUri, server);
+      if (INFO_NODE_NAME_REGEX.test(name)) continue;
+      const stable = `${protocol}|${server}|${url.port}|${url.username}|${url.search}`;
+      result.push({ fingerprint: (await sha256(stable)).slice(0, 24), name, protocol, server, originalUri });
     } catch {
       // Ignore malformed lines while preserving valid nodes in the same subscription.
     }
@@ -70,12 +78,6 @@ export async function parseSubscription(input: string): Promise<ParsedNode[]> {
   return result;
 }
 
-/**
- * A display name is not part of a node's connection identity.  This lets the
- * merged node pool hide an exact duplicate that was published by two upstream
- * subscriptions under different names, while keeping genuinely different
- * connection settings available.
- */
 export function connectionIdentity(originalUri: string, protocol: string): string {
   if (protocol === "vmess") {
     const json = JSON.parse(b64decode(originalUri.slice(8))) as Record<string, unknown>;
@@ -91,11 +93,26 @@ export function connectionIdentity(originalUri: string, protocol: string): strin
 export function rewriteNode(originalUri: string, protocol: string, hostname: string, name?: string): string {
   if (protocol === "vmess") {
     const json = JSON.parse(b64decode(originalUri.slice(8))) as Record<string, unknown>;
+    const origHost = String(json.add ?? "");
+    if (origHost && dnsType(origHost) === "CNAME" && !json.sni && !json.host) {
+      json.sni = origHost;
+    }
     json.add = hostname;
     if (name) json.ps = name;
     return `vmess://${b64encode(JSON.stringify(json))}`;
   }
   const url = new URL(originalUri);
+  const origHost = url.hostname;
+  if (
+    origHost &&
+    dnsType(origHost) === "CNAME" &&
+    ["vless", "trojan", "hysteria2", "hy2", "tuic", "anytls"].includes(protocol.toLowerCase()) &&
+    !url.searchParams.get("sni") &&
+    !url.searchParams.get("servername") &&
+    !url.searchParams.get("peer")
+  ) {
+    url.searchParams.set("sni", origHost);
+  }
   url.hostname = hostname;
   if (name) url.hash = name;
   return url.toString();
