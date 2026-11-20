@@ -18,13 +18,13 @@
     "APP_PLANS_JSON": "[{\"id\":\"monthly\",\"name\":\"Monthly\",\"amountCents\":999,\"currency\":\"USD\",\"days\":30,\"nodeLimit\":8,\"trafficGb\":100},{\"id\":\"quarterly\",\"name\":\"Quarterly\",\"amountCents\":2499,\"currency\":\"USD\",\"days\":90,\"nodeLimit\":12,\"trafficGb\":300}]",
     "APP_UPDATE_WINDOWS_VERSION": "4.3.0",
     "APP_UPDATE_WINDOWS_NOTES": "【新版本体验】外贸加速器 v4.3.0 正式发布！新增左侧独立设置中心，优化分流策略与节点稳定性。",
-    "APP_UPDATE_VERSION_CODE": "10006",
+    "APP_UPDATE_VERSION_CODE": "10007",
     "APP_UPDATE_VERSION_NAME": "1.15.0-alpha.13",
     "APP_UPDATE_APK_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk",
     "APP_UPDATE_RELEASE_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-1.15.0-alpha.13.apk",
-    "APP_UPDATE_MESSAGE": "1. 新增 Hysteria2、AnyTLS、Shadowsocks 2022、TUIC 等全协议节点支持\n2. 优化专属 DNS 节点 TLS SNI 握手与测速连通性\n3. 用户中心新增“官方网站”入口（https://dl.5858188.xyz）\n4. 深度瘦身混淆优化（体积缩减 58% 至 37MB）",
+    "APP_UPDATE_MESSAGE": "1. 修复连接节点后控制台域名死锁问题（官方服务直连保障，同步账号不再受节点影响）\n2. 全协议节点支持（Hysteria2、AnyTLS、SS-2022 等）与 SNI 智能保留\n3. 用户中心新增“官方网站”入口\n4. 深度瘦身混淆优化",
     "APP_UPDATE_FORCE": "false",
-    "APP_UPDATE_SHA256": "53892F4A19B9136092F6A68FFB90E78539780C620854A08C74312F4A42311C35"
+    "APP_UPDATE_SHA256": "60E3795D199CC1262C7134233B8F0C0931E103FEDF2801B24792D627ECABB3F5"
   },
   "d1_databases": [
     {
