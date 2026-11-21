@@ -1211,12 +1211,12 @@ async function provisionUser(env, user, { prune = true } = {}) {
   const nodes = rawAllowedIds.length ? (allowedIds.length ? await env.DB.prepare(`SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes WHERE active=1 AND id IN (${allowedIds.map(() => "?").join(",")})${excludeSql} ORDER BY RANDOM() LIMIT ?`).bind(...allowedIds, ...activeNodeIds, fill).all() : { results: [] }) : await env.DB.prepare(`SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes WHERE upstream_id=? AND active=1${excludeSql} ORDER BY RANDOM() LIMIT ?`).bind(user.upstream_id, ...activeNodeIds, fill).all();
   let created = 0, failed = 0;
   const allPools = dnsPools(env);
+  const failedZoneIds = new Set();
   for (const node of nodes.results) {
     if ((env.__subrequests || 0) >= 38) break;
     const existing = await env.DB.prepare("SELECT id,status FROM user_dns_records WHERE user_id=? AND node_id=?").bind(user.id, node.id).first();
     if (existing?.status === "active") continue;
     const label = `u${user.id}-r${user.dns_revision}-${node.fingerprint.slice(0, 10)}-${node.id}`;
-    const failedZoneIds = new Set();
     let recordCreated = false;
     let lastErrorMsg = "";
     let lastZoneId = "";
