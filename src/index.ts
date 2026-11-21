@@ -697,7 +697,8 @@ __name(authorized, "authorized");
 __name2(authorized, "authorized");
 __name22(authorized, "authorized");
 function appPublicBase(request, env) {
-  return (env.PUBLIC_BASE_URL || new URL(request.url).origin).replace(/\/$/, "");
+  const fallback = request?.url ? new URL(request.url).origin : "";
+  return (env?.PUBLIC_BASE_URL || fallback).replace(/\/$/, "");
 }
 __name(appPublicBase, "appPublicBase");
 __name2(appPublicBase, "appPublicBase");
@@ -1136,16 +1137,19 @@ __name(syncUpstream, "syncUpstream");
 __name2(syncUpstream, "syncUpstream");
 __name22(syncUpstream, "syncUpstream");
 async function reconcileUpstream(env, upstreamId) {
+  const budget = createBudget(env, 250);
+  const concurrency = Math.max(1, Math.min(5, Number(env?.DNS_CONCURRENCY || 4)));
   const stale = await env.DB.prepare(`SELECT d.id,d.cloudflare_record_id,d.zone_id FROM user_dns_records d JOIN nodes n ON n.id=d.node_id
     WHERE n.upstream_id=? AND n.active=0 AND d.status='active'`).bind(upstreamId).all();
-  for (const row of stale.results) {
+  await runWithConcurrency(stale.results || [], concurrency, async (row) => {
+    if (budget.count >= budget.limit || budget.rateLimited) return;
     try {
-      await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
+      await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "", budget);
       await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE id=?").bind(row.id).run();
     } catch (error) {
       await env.DB.prepare("UPDATE user_dns_records SET status='error',last_error=? WHERE id=?").bind(error instanceof Error ? error.message : String(error), row.id).run();
     }
-  }
+  });
   try {
     await env.DB.batch([
       env.DB.prepare(`INSERT OR IGNORE INTO user_selected_nodes(user_id, node_id)
@@ -1173,7 +1177,10 @@ async function reconcileUpstream(env, upstreamId) {
         WHERE p.plan_id=COALESCE(u.plan_id, 'trial_1d') AND n.upstream_id=?
       )
     )`).bind(upstreamId, upstreamId, upstreamId).all();
-  for (const user of users.results) await provisionUser(env, user);
+  for (const user of users.results || []) {
+    if (budget.count >= budget.limit || budget.rateLimited) break;
+    await provisionUser(env, user, { budget });
+  }
 }
 __name(reconcileUpstream, "reconcileUpstream");
 __name2(reconcileUpstream, "reconcileUpstream");
@@ -1300,18 +1307,23 @@ async function provisionUser(env, user, { prune = true, budget = null } = {}) {
     if (existing?.status === "active") return;
     const label = `u${user.id}-r${user.dns_revision}-${node.fingerprint.slice(0, 10)}-${node.id}`;
     let recordCreated = false;
+    let abortedByBudget = false;
     let lastErrorMsg = "";
     let lastZoneId = "";
     let lastHostname = "";
 
     while (failedZoneIds.size < allPools.length) {
-      if (effectiveBudget.count >= effectiveBudget.limit || effectiveBudget.rateLimited) break;
+      if (effectiveBudget.count >= effectiveBudget.limit || effectiveBudget.rateLimited) {
+        abortedByBudget = true;
+        break;
+      }
       let pool;
       try {
         pool = selectDnsPoolFromStats(allPools, poolStats, failedZoneIds);
       } catch {
         break;
       }
+      poolStats.activeCounts.set(pool.zoneId, (poolStats.activeCounts.get(pool.zoneId) || 0) + 1);
       lastZoneId = pool.zoneId;
       lastHostname = `${label}.${pool.suffix}`;
       try {
@@ -1319,19 +1331,22 @@ async function provisionUser(env, user, { prune = true, budget = null } = {}) {
         await env.DB.prepare(`INSERT INTO user_dns_records(user_id,node_id,hostname,record_type,record_content,cloudflare_record_id,zone_id,status,last_error)
           VALUES(?,?,?,?,?,?,?, 'active',NULL)
           ON CONFLICT(user_id,node_id) DO UPDATE SET hostname=excluded.hostname,record_type=excluded.record_type,record_content=excluded.record_content,cloudflare_record_id=excluded.cloudflare_record_id,zone_id=excluded.zone_id,status='active',last_error=NULL`).bind(user.id, node.id, lastHostname, dnsType(node.original_server), node.original_server, recordId, pool.zoneId).run();
-        poolStats.activeCounts.set(pool.zoneId, (poolStats.activeCounts.get(pool.zoneId) || 0) + 1);
         created++;
         recordCreated = true;
         break;
       } catch (error) {
+        poolStats.activeCounts.set(pool.zoneId, Math.max(0, (poolStats.activeCounts.get(pool.zoneId) || 1) - 1));
         failedZoneIds.add(pool.zoneId);
         poolStats.errorCounts.set(pool.zoneId, (poolStats.errorCounts.get(pool.zoneId) || 0) + 1);
         lastErrorMsg = error instanceof Error ? error.message : String(error);
-        if (effectiveBudget.rateLimited || lastErrorMsg.includes("budget exceeded") || lastErrorMsg.includes("subrequest")) break;
+        if (effectiveBudget.rateLimited || lastErrorMsg.includes("budget exceeded") || lastErrorMsg.includes("subrequest")) {
+          abortedByBudget = true;
+          break;
+        }
       }
     }
 
-    if (!recordCreated) {
+    if (!recordCreated && !abortedByBudget) {
       failed++;
       await env.DB.prepare(`INSERT INTO user_dns_records(user_id,node_id,hostname,record_type,record_content,zone_id,status,last_error)
         VALUES(?,?,?,?,?,?,'error',?) ON CONFLICT(user_id,node_id) DO UPDATE SET status='error',last_error=excluded.last_error,zone_id=excluded.zone_id`).bind(user.id, node.id, lastHostname || `${label}.failed`, dnsType(node.original_server), node.original_server, lastZoneId || env.CF_ZONE_ID, lastErrorMsg || "All pools failed").run();
@@ -1387,7 +1402,8 @@ async function healAndMaintain(env) {
       HAVING COUNT(d.id) < u.node_limit OR EXISTS (
         SELECT 1 FROM user_dns_records e WHERE e.user_id = u.id AND e.status = 'error'
       )
-      LIMIT 10
+      ORDER BY COUNT(d.id) ASC, RANDOM()
+      LIMIT 20
     `).all();
 
     let healed = 0;
@@ -1400,6 +1416,20 @@ async function healAndMaintain(env) {
         console.error(JSON.stringify({ event: "heal_user_error", userId: u.id, error: err instanceof Error ? err.message : String(err) }));
       }
     }
+    const pools = dnsPools(env);
+    const stats = await loadDnsPoolStats(env);
+    let totalActive = 0, totalCapacity = 0;
+    const poolSummary = pools.map((p) => {
+      const active = stats.activeCounts.get(p.zoneId) || 0;
+      const errors = stats.errorCounts.get(p.zoneId) || 0;
+      totalActive += active;
+      totalCapacity += p.maxRecords;
+      return { suffix: p.suffix, zoneId: p.zoneId, active, errors, maxRecords: p.maxRecords };
+    });
+    const usageRatio = totalCapacity > 0 ? totalActive / totalCapacity : 1;
+    if (usageRatio >= 0.85 || poolSummary.some((p) => p.errors >= 5)) {
+      console.warn(JSON.stringify({ event: "dns_pool_alert", usageRatio: Number(usageRatio.toFixed(3)), pools: poolSummary }));
+    }
     console.log(JSON.stringify({ event: "heal_complete", healed, budgetUsed: budget.count }));
     return { healed, budgetUsed: budget.count };
   } catch (err) {
@@ -1411,12 +1441,16 @@ __name(healAndMaintain, "healAndMaintain");
 __name2(healAndMaintain, "healAndMaintain");
 __name22(healAndMaintain, "healAndMaintain");
 async function expireUsers(env) {
+  const budget = createBudget(env, 200);
   const users = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE status='active' AND expires_at<=datetime('now')").all();
-  for (const user of users.results) {
-    await deprovisionUser(env, user.id);
+  let expired = 0;
+  for (const user of users.results || []) {
+    if (budget.count >= budget.limit || budget.rateLimited) break;
+    await deprovisionUser(env, user.id, budget);
     await env.DB.prepare("UPDATE users SET status='expired' WHERE id=?").bind(user.id).run();
+    expired++;
   }
-  return users.results.length;
+  return expired;
 }
 __name(expireUsers, "expireUsers");
 __name2(expireUsers, "expireUsers");
@@ -1616,12 +1650,16 @@ async function appApi(request, env, url) {
     return json({ plans: await loadAppPlans(env) });
   }
   if (request.method === "POST" && url.pathname === "/api/app/email/recover/request-code") {
-    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
-    const ipCheck = await checkRateLimit(env, "email_code_ip", clientIp, 10, 60);
-    if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many email code requests" }, 429);
+    const clientIp = (request.headers.get("cf-connecting-ip") || "").trim();
+    if (clientIp) {
+      const ipCheck = await checkRateLimit(env, "email_code_ip", clientIp, 10, 60);
+      if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many email code requests" }, 429);
+    }
     const input = await body(request);
     const clean = cleanProfileInput({ email: input.email });
     if (clean.error || !clean.email || !clean.normalizedEmail) return json({ error: clean.error || "email_required" }, 400);
+    const emailSendCheck = await checkRateLimit(env, "email_code_addr", clean.normalizedEmail, 1, 60);
+    if (!emailSendCheck.ok) return json({ error: "rate_limited", message: "验证码发送过于频繁，请 60 秒后重试" }, 429);
     const profile = await env.DB.prepare("SELECT user_id FROM app_user_profiles WHERE normalized_email=?").bind(clean.normalizedEmail).first();
     const expiresAt = new Date(Date.now() + 10 * 6e4).toISOString();
     if (profile) {
@@ -1632,9 +1670,11 @@ async function appApi(request, env, url) {
     return json({ ok: true, purpose: "recover", email: clean.email, expiresAt });
   }
   if (request.method === "POST" && url.pathname === "/api/app/email/recover/verify") {
-    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
-    const attemptCheck = await checkRateLimit(env, "email_verify_attempt_ip", clientIp, 20, 300);
-    if (!attemptCheck.ok) return json({ error: "rate_limited", message: "Too many verification attempts" }, 429);
+    const clientIp = (request.headers.get("cf-connecting-ip") || "").trim();
+    if (clientIp) {
+      const attemptCheck = await checkRateLimit(env, "email_verify_attempt_ip", clientIp, 20, 300);
+      if (!attemptCheck.ok) return json({ error: "rate_limited", message: "Too many verification attempts" }, 429);
+    }
     const input = await body(request);
     const clean = cleanProfileInput({ email: input.email });
     const deviceUUID = String(input.device_uuid || "").trim().toLowerCase();
@@ -1645,7 +1685,11 @@ async function appApi(request, env, url) {
       WHERE normalized_email=? AND purpose='recover' AND code_hash=? AND consumed_at IS NULL AND expires_at>?
       ORDER BY id DESC LIMIT 1`).bind(clean.normalizedEmail, codeHash, (/* @__PURE__ */ new Date()).toISOString()).first();
     if (!row) {
-      await checkRateLimit(env, "email_verify_fail_ip", clientIp, 10, 300);
+      const failCheck = await checkRateLimit(env, "email_verify_fail_recover", clean.normalizedEmail, 5, 600);
+      if (!failCheck.ok) {
+        await env.DB.prepare("UPDATE app_email_codes SET consumed_at=CURRENT_TIMESTAMP WHERE normalized_email=? AND purpose='recover' AND consumed_at IS NULL").bind(clean.normalizedEmail).run();
+        return json({ error: "too_many_failed_attempts", message: "验证码错误次数过多已作废，请重新获取" }, 429);
+      }
       return json({ error: "invalid_or_expired_code" }, 400);
     }
     const deviceHash = await hash(deviceUUID);
@@ -1666,10 +1710,12 @@ async function appApi(request, env, url) {
     return json({ ...await appUserPayload(request, env, row.user_id, device.id), access_token: accessToken, accessTokenExpiresAt: sessionExpiresAt });
   }
   if (request.method === "POST" && url.pathname === "/api/app/bootstrap") {
-    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
-    const ipLimit = Number(env.BOOTSTRAP_PER_IP_MINUTE || 60);
-    const ipCheck = await checkRateLimit(env, "bootstrap_ip", clientIp, ipLimit, 60);
-    if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many bootstrap requests" }, 429);
+    const clientIp = (request.headers.get("cf-connecting-ip") || "").trim();
+    if (clientIp) {
+      const ipLimit = Number(env.BOOTSTRAP_PER_IP_MINUTE || 60);
+      const ipCheck = await checkRateLimit(env, "bootstrap_ip", clientIp, ipLimit, 60);
+      if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many bootstrap requests" }, 429);
+    }
     const input = await body(request);
     const deviceUUID = String(input.device_uuid || "").trim().toLowerCase();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(deviceUUID)) return json({ error: "invalid_device_uuid" }, 400);
@@ -1679,9 +1725,11 @@ async function appApi(request, env, url) {
     const guestPrefix = isDesktop ? "Web Guest" : "App Guest";
     let device = await env.DB.prepare("SELECT id,user_id,subscription_token FROM app_devices WHERE device_uuid_hash=?").bind(deviceHash).first();
     if (!device) {
-      const newDevLimit = Number(env.BOOTSTRAP_NEW_DEVICE_PER_IP_HOUR || 30);
-      const newDevCheck = await checkRateLimit(env, "bootstrap_new_device_ip", clientIp, newDevLimit, 3600);
-      if (!newDevCheck.ok) return json({ error: "rate_limited", message: "New device creation limit reached" }, 429);
+      if (clientIp) {
+        const newDevLimit = Number(env.BOOTSTRAP_NEW_DEVICE_PER_IP_HOUR || 30);
+        const newDevCheck = await checkRateLimit(env, "bootstrap_new_device_ip", clientIp, newDevLimit, 3600);
+        if (!newDevCheck.ok) return json({ error: "rate_limited", message: "New device creation limit reached" }, 429);
+      }
       const upstream = await env.DB.prepare("SELECT id FROM upstreams WHERE enabled=1 ORDER BY id LIMIT 1").first();
       if (!upstream) return json({ error: "no_upstream_available" }, 503);
       const subscriptionToken = randomToken();
@@ -1714,14 +1762,18 @@ async function appApi(request, env, url) {
   if (request.method === "POST" && url.pathname === "/api/app/email/request-code") {
     const session = await requireAppSession(request, env);
     if (session instanceof Response) return session;
-    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
-    const ipCheck = await checkRateLimit(env, "email_code_ip", clientIp, 10, 60);
-    if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many email code requests" }, 429);
+    const clientIp = (request.headers.get("cf-connecting-ip") || "").trim();
+    if (clientIp) {
+      const ipCheck = await checkRateLimit(env, "email_code_ip", clientIp, 10, 60);
+      if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many email code requests" }, 429);
+    }
     const input = await body(request);
     const clean = cleanProfileInput({ email: input.email });
     if (clean.error || !clean.email || !clean.normalizedEmail) return json({ error: clean.error || "email_required" }, 400);
     const occupied = await env.DB.prepare("SELECT user_id FROM app_user_profiles WHERE normalized_email=? AND user_id<>?").bind(clean.normalizedEmail, session.user_id).first();
     if (occupied) return json({ error: "email_already_bound" }, 409);
+    const emailSendCheck = await checkRateLimit(env, "email_code_addr", clean.normalizedEmail, 1, 60);
+    if (!emailSendCheck.ok) return json({ error: "rate_limited", message: "验证码发送过于频繁，请 60 秒后重试" }, 429);
     const code = randomCode();
     const expiresAt = new Date(Date.now() + 10 * 6e4).toISOString();
     await env.DB.prepare("INSERT INTO app_email_codes(user_id,email,normalized_email,purpose,code_hash,expires_at) VALUES(?,?,?,?,?,?)").bind(session.user_id, clean.email, clean.normalizedEmail, "bind", await emailCodeHash(env, clean.email, code, "bind"), expiresAt).run();
@@ -1731,9 +1783,11 @@ async function appApi(request, env, url) {
   if (request.method === "POST" && url.pathname === "/api/app/email/verify-bind") {
     const session = await requireAppSession(request, env);
     if (session instanceof Response) return session;
-    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
-    const attemptCheck = await checkRateLimit(env, "email_verify_attempt_ip", clientIp, 20, 300);
-    if (!attemptCheck.ok) return json({ error: "rate_limited", message: "Too many verification attempts" }, 429);
+    const clientIp = (request.headers.get("cf-connecting-ip") || "").trim();
+    if (clientIp) {
+      const attemptCheck = await checkRateLimit(env, "email_verify_attempt_ip", clientIp, 20, 300);
+      if (!attemptCheck.ok) return json({ error: "rate_limited", message: "Too many verification attempts" }, 429);
+    }
     const input = await body(request);
     const clean = cleanProfileInput({ email: input.email, nickname: input.nickname });
     if (clean.error || !clean.email || !clean.normalizedEmail) return json({ error: clean.error || "email_required" }, 400);
@@ -1742,7 +1796,11 @@ async function appApi(request, env, url) {
       WHERE user_id=? AND normalized_email=? AND purpose='bind' AND code_hash=? AND consumed_at IS NULL AND expires_at>?
       ORDER BY id DESC LIMIT 1`).bind(session.user_id, clean.normalizedEmail, codeHash, (/* @__PURE__ */ new Date()).toISOString()).first();
     if (!row) {
-      await checkRateLimit(env, "email_verify_fail_ip", clientIp, 10, 300);
+      const failCheck = await checkRateLimit(env, "email_verify_fail_bind", clean.normalizedEmail, 5, 600);
+      if (!failCheck.ok) {
+        await env.DB.prepare("UPDATE app_email_codes SET consumed_at=CURRENT_TIMESTAMP WHERE normalized_email=? AND purpose='bind' AND consumed_at IS NULL").bind(clean.normalizedEmail).run();
+        return json({ error: "too_many_failed_attempts", message: "验证码错误次数过多已作废，请重新获取" }, 429);
+      }
       return json({ error: "invalid_or_expired_code" }, 400);
     }
     const profile = await upsertUserProfile(env, session.user_id, { email: clean.email, nickname: clean.nickname });
@@ -1924,7 +1982,7 @@ __name22(appPaymentCallback, "appPaymentCallback");
 async function enforceDeviceLimit(env, userId, currentDeviceId = null) {
   const user = await env.DB.prepare("SELECT id, device_limit FROM users WHERE id=?").bind(userId).first();
   const limit = Math.max(1, Number(user?.device_limit ?? 2));
-  const rows = await env.DB.prepare("SELECT id, last_seen_at FROM app_devices WHERE user_id=? ORDER BY last_seen_at ASC, id ASC").bind(userId).all();
+  const rows = await env.DB.prepare("SELECT id, last_seen_at FROM app_devices WHERE user_id=? AND COALESCE(app_version,'') != 'admin_manual' ORDER BY last_seen_at ASC, id ASC").bind(userId).all();
   const allDevices = rows.results || [];
   if (allDevices.length > limit) {
     const candidateDevices = currentDeviceId ? allDevices.filter(d => d.id !== currentDeviceId) : allDevices;
@@ -1958,7 +2016,7 @@ async function adminUserDetail(arg1, arg2, arg3) {
   const baseUrl = appPublicBase(request, env);
   const subscriptionUrl = subToken ? `${baseUrl}/api/subscription/${subToken}` : null;
   const [devices, orders, dns, access, selectedNodes, availableNodes] = await Promise.all([
-    env.DB.prepare("SELECT id,platform,app_version,model,created_at,last_seen_at FROM app_devices WHERE user_id=? ORDER BY last_seen_at DESC,id DESC LIMIT 20").bind(userId).all(),
+    env.DB.prepare("SELECT id,platform,app_version,model,created_at,last_seen_at FROM app_devices WHERE user_id=? AND COALESCE(app_version,'') != 'admin_manual' ORDER BY last_seen_at DESC,id DESC LIMIT 20").bind(userId).all(),
     env.DB.prepare("SELECT id,order_no,plan_id,provider,status,amount_cents,currency,provider_order_id,created_at,updated_at FROM app_orders WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 30").bind(userId).all(),
     env.DB.prepare(`SELECT d.id,d.hostname,d.record_type,d.status,d.last_error,d.created_at,n.name node_name,n.protocol
       FROM user_dns_records d LEFT JOIN nodes n ON n.id=d.node_id
@@ -2150,8 +2208,8 @@ async function api(request, env, url) {
         CASE WHEN u.status='active' AND strftime('%s',u.expires_at)>strftime('%s','now') THEN strftime('%s',u.expires_at)-strftime('%s','now') ELSE 0 END remaining_seconds,
         (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='active') dns_count,
         (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='error') error_dns_count,
-        (SELECT COUNT(*) FROM app_devices WHERE user_id=u.id) device_count,
-        (SELECT MAX(last_seen_at) FROM app_devices WHERE user_id=u.id) last_seen_at,
+        (SELECT COUNT(*) FROM app_devices WHERE user_id=u.id AND COALESCE(app_version,'') != 'admin_manual') device_count,
+        (SELECT MAX(last_seen_at) FROM app_devices WHERE user_id=u.id AND COALESCE(app_version,'') != 'admin_manual') last_seen_at,
         (SELECT COUNT(*) FROM app_orders WHERE user_id=u.id) order_count,
         (SELECT status FROM app_orders WHERE user_id=u.id ORDER BY created_at DESC,id DESC LIMIT 1) last_order_status,
         (SELECT plan_id FROM app_orders WHERE user_id=u.id AND status='paid' ORDER BY updated_at DESC,id DESC LIMIT 1) paid_plan_id
@@ -2226,9 +2284,9 @@ async function api(request, env, url) {
     if (!user) return json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" }, 404);
     const token = randomToken();
     await env.DB.prepare("UPDATE users SET token_hash=?,token_hint=? WHERE id=?").bind(await hash(token), token.slice(0, 8), id).run();
-    const existingDev = await env.DB.prepare("SELECT id FROM app_devices WHERE user_id=? ORDER BY id DESC LIMIT 1").bind(id).first();
-    if (existingDev) {
-      await env.DB.prepare("UPDATE app_devices SET subscription_token=? WHERE id=?").bind(token, existingDev.id).run();
+    const existingCount = await env.DB.prepare("SELECT COUNT(*) count FROM app_devices WHERE user_id=?").bind(id).first();
+    if (Number(existingCount?.count || 0) > 0) {
+      await env.DB.prepare("UPDATE app_devices SET subscription_token=? WHERE user_id=?").bind(token, id).run();
     } else {
       await env.DB.prepare("INSERT INTO app_devices(user_id,device_uuid_hash,subscription_token,platform,app_version,model) VALUES(?,?,?,'web','admin_manual','Admin Manual')").bind(id, await hash(randomToken()), token).run();
     }

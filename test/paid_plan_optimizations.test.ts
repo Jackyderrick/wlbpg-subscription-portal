@@ -254,4 +254,279 @@ describe("Cloudflare Workers Paid ($5/月) 专项优化验证", () => {
       }).not.toThrow();
     }
   });
+
+  it("集成测试: POST /api/users/1/reset-token 同步更新用户全部设备 subscription_token", async () => {
+    const executedUpdates: any[] = [];
+    const mockEnv: any = {
+      ADMIN_SECRET: "test-admin-secret",
+      PUBLIC_BASE_URL: "https://app.5858188.xyz",
+      DB: {
+        prepare: (sql: string) => ({
+          bind: (...args: any[]) => ({
+            first: async () => {
+              if (sql.includes("SELECT id FROM users WHERE id=?")) {
+                return { id: 1 };
+              }
+              if (sql.includes("SELECT COUNT(*) count FROM app_devices WHERE user_id=?")) {
+                return { count: 2 };
+              }
+              return null;
+            },
+            run: async () => {
+              if (sql.includes("UPDATE app_devices SET subscription_token=? WHERE user_id=?")) {
+                executedUpdates.push({ sql, args });
+              }
+              return { success: true };
+            }
+          })
+        })
+      }
+    };
+
+    const req = new Request("https://app.5858188.xyz/api/users/1/reset-token", {
+      method: "POST",
+      headers: {
+        authorization: "Bearer test-admin-secret",
+        "content-type": "application/json"
+      }
+    });
+
+    const res = await worker.fetch(req, mockEnv);
+    expect(res.status).toBe(200);
+    const body: any = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.token).toBeDefined();
+    expect(body.subscriptionUrl).toBe(`https://app.5858188.xyz/api/subscription/${body.token}`);
+
+    // Verify all devices under user_id=1 were updated in batch
+    expect(executedUpdates.length).toBe(1);
+    expect(executedUpdates[0].args).toEqual([body.token, 1]);
+  });
+
+  it("集成测试: POST /api/app/email/recover/verify 连续传错 5 次后，第 6 次触发 429 且作废验证码", async () => {
+    const rateLimitHits = new Map<string, number>();
+    const consumedEmails: string[] = [];
+
+    const mockEnv: any = {
+      ADMIN_SECRET: "secret",
+      EMAIL_CODE_PEPPER: "pepper",
+      DB: {
+        prepare: (sql: string) => {
+          const createStmt = (args: any[]) => ({
+            bind: (...newArgs: any[]) => createStmt(newArgs),
+            run: async () => {
+              if (sql.includes("INSERT INTO app_rate_limits")) {
+                const [key, scope, win] = args;
+                const k = `${scope}:${key}:${win}`;
+                rateLimitHits.set(k, (rateLimitHits.get(k) || 0) + 1);
+              }
+              if (sql.includes("UPDATE app_email_codes SET consumed_at=CURRENT_TIMESTAMP")) {
+                consumedEmails.push(args[0]);
+              }
+              return { success: true };
+            },
+            first: async () => {
+              if (sql.includes("SELECT hits FROM app_rate_limits")) {
+                const [key, scope, win] = args;
+                const k = `${scope}:${key}:${win}`;
+                return { hits: rateLimitHits.get(k) || 1 };
+              }
+              if (sql.includes("SELECT id,user_id FROM app_email_codes")) {
+                return null;
+              }
+              return null;
+            },
+            all: async () => ({ results: [] })
+          });
+          return createStmt([]);
+        }
+      }
+    };
+
+    const targetEmail = "victim@example.com";
+    const postVerify = async (attempt: number) => {
+      const req = new Request("https://app.5858188.xyz/api/app/email/recover/verify", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": `203.0.113.${attempt}`
+        },
+        body: JSON.stringify({
+          email: targetEmail,
+          code: `00000${attempt}`,
+          device_uuid: "11111111-2222-4333-a444-555555555555"
+        })
+      });
+      return worker.fetch(req, mockEnv);
+    };
+
+    // First 5 attempts return 400 invalid_or_expired_code
+    for (let i = 1; i <= 5; i++) {
+      const res = await postVerify(i);
+      expect(res.status).toBe(400);
+      const json: any = await res.json();
+      expect(json.error).toBe("invalid_or_expired_code");
+    }
+
+    // 6th attempt hits limit -> returns 429 too_many_failed_attempts
+    const res6 = await postVerify(6);
+    expect(res6.status).toBe(429);
+    const json6: any = await res6.json();
+    expect(json6.error).toBe("too_many_failed_attempts");
+    expect(json6.message).toContain("验证码错误次数过多已作废");
+    expect(consumedEmails).toContain("victim@example.com");
+  });
+
+  it("集成测试: POST /api/app/bootstrap 无 cf-connecting-ip 时不写入 'unknown' 限流桶", async () => {
+    const rateLimitKeys: string[] = [];
+
+    const mockEnv: any = {
+      DB: {
+        prepare: (sql: string) => {
+          const createStmt = (args: any[]) => ({
+            bind: (...newArgs: any[]) => createStmt(newArgs),
+            run: async () => {
+              if (sql.includes("INSERT INTO app_rate_limits")) {
+                rateLimitKeys.push(args[0]);
+              }
+              return { success: true };
+            },
+            first: async () => {
+              if (sql.includes("SELECT id,user_id,subscription_token FROM app_devices")) {
+                return { id: 10, user_id: 100, subscription_token: "tok123" };
+              }
+              if (sql.includes("SELECT id,name,upstream_id,expires_at,status,node_limit,COALESCE(device_limit,2) device_limit,COALESCE(plan_id,'trial_1d') plan_id,dns_revision FROM users")) {
+                return { id: 100, name: "Existing User", status: "active", expires_at: "2027-01-01T00:00:00Z", node_limit: 5, dns_revision: 0, plan_id: "trial_1d" };
+              }
+              if (sql.includes("SELECT plan_id,amount_cents,currency,updated_at FROM app_orders")) {
+                return null;
+              }
+              if (sql.includes("SELECT email,phone,nickname,remark,updated_at FROM app_user_profiles")) {
+                return null;
+              }
+              if (sql.includes("SELECT id,platform,app_version,model,created_at,last_seen_at,subscription_token FROM app_devices")) {
+                return { id: 10, platform: "android", subscription_token: "tok123" };
+              }
+              return null;
+            },
+            all: async () => ({ results: [] })
+          });
+          return createStmt([]);
+        }
+      }
+    };
+
+    // Request WITHOUT cf-connecting-ip
+    const req = new Request("https://app.5858188.xyz/api/app/bootstrap", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({
+        device_uuid: "22222222-3333-4444-a555-666666666666",
+        platform: "android"
+      })
+    });
+
+    const res = await worker.fetch(req, mockEnv);
+    expect(res.status).toBe(201);
+    expect(rateLimitKeys).not.toContain("unknown");
+    expect(rateLimitKeys.length).toBe(0);
+  });
+
+  it("集成测试: worker.scheduled (*/15 * * * *) 自动补齐活跃用户并输出告警日志", async () => {
+    const logs: string[] = [];
+    const warns: string[] = [];
+    const origLog = console.log;
+    const origWarn = console.warn;
+    console.log = (...args: any[]) => logs.push(args.join(" "));
+    console.warn = (...args: any[]) => warns.push(args.join(" "));
+
+    try {
+      const z1 = "11111111222233334444555566667777";
+      const z2 = "22222222333344445555666677778888";
+      const mockEnv: any = {
+        DNS_POOLS: JSON.stringify([
+          { suffix: "pool1.xyz", zoneId: z1, maxRecords: 100 },
+          { suffix: "pool2.xyz", zoneId: z2, maxRecords: 100 }
+        ]),
+        CF_ZONE_ID: z1,
+        CF_API_TOKEN: "cf-token",
+        DB: {
+          prepare: (sql: string) => {
+            const createStmt = (args: any[]) => ({
+              bind: (...newArgs: any[]) => createStmt(newArgs),
+              run: async () => ({ success: true }),
+              first: async () => {
+                if (sql.includes("SELECT id,status FROM user_dns_records WHERE user_id=? AND node_id=?")) {
+                  return null;
+                }
+                return null;
+              },
+              all: async () => {
+                if (sql.includes("SELECT DISTINCT u.id, u.name, u.upstream_id")) {
+                  return {
+                    results: [
+                      { id: 66, name: "Heal Candidate", upstream_id: 1, expires_at: "2027-11-20T11:49:01Z", status: "active", node_limit: 1, plan_id: "trial_1d", dns_revision: 0 }
+                    ]
+                  };
+                }
+                if (sql.includes("SELECT COALESCE(zone_id, ?) zone_id, status, COUNT(*) total FROM user_dns_records")) {
+                  return {
+                    results: [
+                      { zone_id: z1, status: "active", total: 90 },
+                      { zone_id: z2, status: "error", total: 6 }
+                    ]
+                  };
+                }
+                if (sql.includes("SELECT node_id FROM user_selected_nodes")) {
+                  return { results: [] };
+                }
+                if (sql.includes("SELECT node_id FROM plan_selected_nodes")) {
+                  return { results: [] };
+                }
+                if (sql.includes("SELECT id,node_id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='error'")) {
+                  return { results: [] };
+                }
+                if (sql.includes("SELECT id,node_id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='active'")) {
+                  return { results: [] };
+                }
+                if (sql.includes("SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes")) {
+                  return {
+                    results: [
+                      { id: 101, fingerprint: "fp1234567890", name: "Node 1", protocol: "vless", original_server: "1.1.1.1", original_uri: "vless://..." }
+                    ]
+                  };
+                }
+                return { results: [] };
+              }
+            });
+            return createStmt([]);
+          }
+        }
+      };
+
+      const origFetch = globalThis.fetch;
+      globalThis.fetch = async (url: any, init: any) => {
+        return new Response(JSON.stringify({ success: true, result: { id: "dns-rec-1" } }), { status: 200, headers: { "content-type": "application/json" } });
+      };
+
+      try {
+        await worker.scheduled({ cron: "*/15 * * * *" } as any, mockEnv, {} as any);
+      } finally {
+        globalThis.fetch = origFetch;
+      }
+
+      const healLog = logs.find(l => l.includes("heal_complete"));
+      expect(healLog).toBeDefined();
+      expect(healLog).toContain('"healed":1');
+
+      const alertWarn = warns.find(w => w.includes("dns_pool_alert"));
+      expect(alertWarn).toBeDefined();
+      expect(alertWarn).toContain('"usageRatio"');
+    } finally {
+      console.log = origLog;
+      console.warn = origWarn;
+    }
+  });
 });
