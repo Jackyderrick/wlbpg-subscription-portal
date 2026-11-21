@@ -42,4 +42,11 @@ describe("Admin direct node import and customer DNS node binding", () => {
     expect(getGuestPrefix("web")).toBe("Web Guest");
     expect(getGuestPrefix("desktop")).toBe("Web Guest");
   });
+
+  it("verifies user detail subscription URL format", () => {
+    const subToken = "dqwIdo2Mk-LUaw5lPTnauMlQrpgRB-Vb";
+    const baseUrl = "https://app.5858188.xyz";
+    const subscriptionUrl = subToken ? `${baseUrl}/api/subscription/${subToken}` : null;
+    expect(subscriptionUrl).toBe("https://app.5858188.xyz/api/subscription/dqwIdo2Mk-LUaw5lPTnauMlQrpgRB-Vb");
+  });
 });

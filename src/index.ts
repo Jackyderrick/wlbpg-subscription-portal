@@ -212,7 +212,9 @@ function renderDetail(){
   $('#detail').innerHTML='<div class="aside-heading"><h2>\u7528\u6237\u8BE6\u60C5</h2><button class="icon" data-close title="\u5173\u95ED\u8BE6\u60C5" aria-label="\u5173\u95ED\u8BE6\u60C5">'+I.X+'</button></div>'+
   '<div class="identity"><div><h2>'+esc(u.name)+'</h2><p>#'+u.id+'</p></div>'+badge(u)+'</div>'+
   '<div class="facts"><div class="fact"><span>\u8D26\u53F7\u72B6\u6001</span><span class="badge '+(disabled?'disabled':'')+'">'+(disabled?'\u5DF2\u505C\u7528':'\u5DF2\u542F\u7528')+'</span></div>'+
-  '<div class="fact"><span>\u8BA2\u9605\u72B6\u6001</span>'+badge(u)+'</div><div class="fact"><span>\u6240\u5C5E\u5957\u9910</span><span class="email-value"><span>'+esc(planName(u.plan_id))+'</span><button class="link" data-edit="'+u.id+'">\u5207\u6362</button></span></div><div class="fact"><span>\u5230\u671F\u65F6\u95F4</span><span>'+fmt(u.expires_at)+'</span></div>'+
+  '<div class="fact"><span>\u8BA2\u9605\u72B6\u6001</span>'+badge(u)+'</div>'+
+  '<div class="fact"><span>\u8BA2\u9605\u94FE\u63A5</span><span class="email-value"><span style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:monospace;font-size:12px" title="'+esc(detail.subscriptionUrl||'')+'">'+(detail.subscriptionUrl?esc(detail.subscriptionUrl):'\u672A\u751F\u6210')+'</span>'+(detail.subscriptionUrl?'<button class="link" id="copySubUrl">\u590D\u5236</button>':'')+'<button class="link" id="resetSubUrl">'+(detail.subscriptionUrl?'\u91CD\u7F6E':'\u751F\u6210')+'</button></span></div>'+
+  '<div class="fact"><span>\u6240\u5C5E\u5957\u9910</span><span class="email-value"><span>'+esc(planName(u.plan_id))+'</span><button class="link" data-edit="'+u.id+'">\u5207\u6362</button></span></div><div class="fact"><span>\u5230\u671F\u65F6\u95F4</span><span>'+fmt(u.expires_at)+'</span></div>'+
   '<div class="fact"><span>\u90AE\u7BB1</span><span class="email-value"><span>'+esc(p.email||'\u672A\u586B\u5199')+'</span><button class="link" data-edit="'+u.id+'">\u7F16\u8F91</button></span></div>'+
   '<div class="fact"><span>\u8BBE\u5907 / \u4E0A\u9650</span><span class="email-value"><span>'+Number(summary.device_count??detail.devices.length)+' / '+(u.device_limit||2)+'</span><button class="link" id="viewDevices">\u67E5\u770B\u8BBE\u5907</button></span></div>'+
   '<div class="fact"><span>\u8BA2\u5355</span><span>'+Number(summary.order_count??detail.orders.length)+'</span></div>'+
@@ -394,7 +396,7 @@ $('#prevUsers').onclick=()=>{userPage--;renderUsers()};$('#nextUsers').onclick=(
 $('#orderRows').onclick=e=>{const b=e.target.closest('[data-order-user]');if(b)action(async()=>{await setView('users');await openUser(Number(b.dataset.orderUser))})};
 $('#upRows').onclick=async e=>{const del=e.target.closest('[data-delete-upstream]');if(del&&!busy){const id=del.dataset.deleteUpstream,name=del.dataset.upstreamName||'';if(!await askConfirmation('\u786E\u8BA4\u8981\u5220\u9664\u4E0A\u6E38\u300C'+name+'\u300D\u5417\uFF1F\u5220\u9664\u540E\u8BE5\u4E0A\u6E38\u4E0B\u7684\u8282\u70B9\u53CA\u5173\u8054 DNS \u5C06\u88AB\u6E05\u7406\u3002'))return;action(async()=>{const res=await call('/api/upstreams/'+id,{method:'DELETE'});if(Array.isArray(res.pendingUserIds)){for(const uid of res.pendingUserIds){try{await call('/api/users/'+uid+'/dns',{method:'POST',body:JSON.stringify({})})}catch{}}}await load();notify('\u4E0A\u6E38\u300C'+name+'\u300D\u5DF2\u5220\u9664\u5E76\u8865\u9F50\u7528\u6237 DNS')},del);return}const b=e.target.closest('[data-sync]');if(b)action(async()=>{const d=await call('/api/upstreams/'+b.dataset.sync+'/sync',{method:'POST'});await load();notify('\u540C\u6B65\u5B8C\u6210\uFF1A'+d.found+' \u4E2A\u8282\u70B9')},b)};
 $('#newButton').onclick=()=>{if(view==='plans')openPlanEditor(null);else showEditor(view==='upstreams'?'upstream':'user')};$('#closeEditor').onclick=()=>$('#editor').close();$('#cancelEditor').onclick=()=>$('#editor').close();$('#editorForm').onsubmit=saveEditor;
-$('#detail').oninput=e=>{if(e.target.id==='dayCount')preview()};$('#detail').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;if(b.hasAttribute('data-close'))return closeDetail();if(b.dataset.edit)return showEditor('edit');if(b.hasAttribute('data-days')){days=Number(b.dataset.days);renderDetail();return}if(b.dataset.detailTab){detailTab=b.dataset.detailTab;document.querySelectorAll('[data-detail-tab]').forEach(x=>x.classList.toggle('primary',x===b));renderDetailItems();return}if(b.id==='confirmRenew'){const id=selected;action(async()=>{const expiresAt=expiry();if(!await askConfirmation('\u786E\u8BA4\u7EED\u671F\u81F3 '+fmt(expiresAt)+'\uFF1F\u8282\u70B9\u989D\u5EA6\u4FDD\u6301\u4E0D\u53D8\u3002'))return;const result=await call('/api/users/'+id+'/renew',{method:'POST',body:JSON.stringify({expiresAt})});await load();await openUser(id);notify(result.failed?'\u6709\u6548\u671F\u5DF2\u66F4\u65B0\uFF0C\u4F46\u90E8\u5206 DNS \u914D\u7F6E\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5': '\u7EED\u671F\u6210\u529F',Boolean(result.failed))},b)}if(b.id==='toggleStatus'){const id=selected,disabled=detail.user.status==='disabled';action(async()=>{if(!await askConfirmation(disabled?'\u786E\u8BA4\u542F\u7528\u8BE5\u8D26\u53F7\uFF1F':'\u786E\u8BA4\u505C\u7528\u8D26\u53F7\u5E76\u79FB\u9664\u5176 DNS\uFF1F'))return;if(disabled)await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({status:'active'})});else await call('/api/users/'+id+'/disable',{method:'POST'});await load();await openUser(id);notify(disabled?'\u8D26\u53F7\u5DF2\u542F\u7528':'\u8D26\u53F7\u5DF2\u505C\u7528')},b)}};
+$('#detail').oninput=e=>{if(e.target.id==='dayCount')preview()};$('#detail').onclick=e=>{const b=e.target.closest('button');if(!b||busy)return;if(b.hasAttribute('data-close'))return closeDetail();if(b.dataset.edit)return showEditor('edit');if(b.id==='copySubUrl'){if(detail.subscriptionUrl){try{navigator.clipboard.writeText(detail.subscriptionUrl);notify('\u8BA2\u9605\u94FE\u63A5\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F')}catch{prompt('\u8BF7\u624B\u52A8\u590D\u5236\u8BA2\u9605\u94FE\u63A5\uFF1A',detail.subscriptionUrl)}}return}if(b.id==='resetSubUrl'){const id=selected;action(async()=>{if(!await askConfirmation(detail.subscriptionUrl?'\u786E\u8BA4\u8981\u91CD\u7F6E\u8BE5\u7528\u6237\u7684\u8BA2\u9605\u94FE\u63A5\u5417\uFF1F\u91CD\u7F6E\u540E\u65E7\u94FE\u63A5\u5C06\u7ACB\u5373\u5931\u6548\u3002':'\u786E\u8BA4\u4E3A\u8BE5\u7528\u6237\u751F\u6210\u65B0\u7684\u8BA2\u9605\u94FE\u63A5\u5417\uFF1F'))return;await call('/api/users/'+id+'/reset-token',{method:'POST'});await openUser(id);notify('\u8BA2\u9605\u94FE\u63A5\u5DF2\u66F4\u65B0')},b);return}if(b.hasAttribute('data-days')){days=Number(b.dataset.days);renderDetail();return}if(b.dataset.detailTab){detailTab=b.dataset.detailTab;document.querySelectorAll('[data-detail-tab]').forEach(x=>x.classList.toggle('primary',x===b));renderDetailItems();return}if(b.id==='confirmRenew'){const id=selected;action(async()=>{const expiresAt=expiry();if(!await askConfirmation('\u786E\u8BA4\u7EED\u671F\u81F3 '+fmt(expiresAt)+'\uFF1F\u8282\u70B9\u989D\u5EA6\u4FDD\u6301\u4E0D\u53D8\u3002'))return;const result=await call('/api/users/'+id+'/renew',{method:'POST',body:JSON.stringify({expiresAt})});await load();await openUser(id);notify(result.failed?'\u6709\u6548\u671F\u5DF2\u66F4\u65B0\uFF0C\u4F46\u90E8\u5206 DNS \u914D\u7F6E\u5931\u8D25\uFF0C\u8BF7\u68C0\u67E5': '\u7EED\u671F\u6210\u529F',Boolean(result.failed))},b)}if(b.id==='toggleStatus'){const id=selected,disabled=detail.user.status==='disabled';action(async()=>{if(!await askConfirmation(disabled?'\u786E\u8BA4\u542F\u7528\u8BE5\u8D26\u53F7\uFF1F':'\u786E\u8BA4\u505C\u7528\u8D26\u53F7\u5E76\u79FB\u9664\u5176 DNS\uFF1F'))return;if(disabled)await call('/api/users/'+id,{method:'PATCH',body:JSON.stringify({status:'active'})});else await call('/api/users/'+id+'/disable',{method:'POST'});await load();await openUser(id);notify(disabled?'\u8D26\u53F7\u5DF2\u542F\u7528':'\u8D26\u53F7\u5DF2\u505C\u7528')},b)}};
 function clock(){$('#clock').textContent=fmt(new Date().toISOString())+'\uFF08\u4E0A\u6D77\uFF09'}clock();setInterval(clock,30000);setInterval(()=>{if(!$('#app').hidden){renderUsers();if(detail)preview()}},60000);if(key)action(load);
 <\/script></body></html>`])), admin_styles_default, icons.Layers, icons.Users, icons.Layers, icons.Receipt, icons.Settings, icons.RefreshCw, icons.LogOut, icons.Plus, icons.Search, icons.LogOut, icons.X, icons.X, JSON.stringify(icons));
 var __defProp22 = Object.defineProperty;
@@ -1775,13 +1777,20 @@ async function enforceDeviceLimit(env, userId, currentDeviceId = null) {
 }
 __name(enforceDeviceLimit, "enforceDeviceLimit");
 
-async function adminUserDetail(env, userId) {
+async function adminUserDetail(arg1, arg2, arg3) {
+  const request = arg3 !== void 0 ? arg1 : null;
+  const env = arg3 !== void 0 ? arg2 : arg1;
+  const userId = arg3 !== void 0 ? arg3 : arg2;
   const user = await env.DB.prepare(`SELECT u.id,u.name,u.upstream_id,u.expires_at,u.status,u.node_limit,COALESCE(u.device_limit, 2) device_limit,COALESCE(u.plan_id, 'trial_1d') plan_id,u.dns_revision,u.token_hint,u.created_at,
       p.email,p.phone,p.nickname,p.remark,p.updated_at profile_updated_at,
       (SELECT COUNT(*) FROM user_dns_records WHERE user_id=u.id AND status='active') dns_count
     FROM users u LEFT JOIN app_user_profiles p ON p.user_id=u.id
     WHERE u.id=?`).bind(userId).first();
   if (!user) return null;
+  const devRow = await env.DB.prepare("SELECT subscription_token FROM app_devices WHERE user_id=? AND subscription_token IS NOT NULL ORDER BY id DESC LIMIT 1").bind(userId).first();
+  const subToken = devRow?.subscription_token || null;
+  const baseUrl = appPublicBase(request, env);
+  const subscriptionUrl = subToken ? `${baseUrl}/api/subscription/${subToken}` : null;
   const [devices, orders, dns, access, selectedNodes, availableNodes] = await Promise.all([
     env.DB.prepare("SELECT id,platform,app_version,model,created_at,last_seen_at FROM app_devices WHERE user_id=? ORDER BY last_seen_at DESC,id DESC LIMIT 20").bind(userId).all(),
     env.DB.prepare("SELECT id,order_no,plan_id,provider,status,amount_cents,currency,provider_order_id,created_at,updated_at FROM app_orders WHERE user_id=? ORDER BY created_at DESC,id DESC LIMIT 30").bind(userId).all(),
@@ -1803,7 +1812,9 @@ async function adminUserDetail(env, userId) {
     access,
     selectedNodeIds: selectedNodes.results.map((r) => r.node_id),
     planSelectedNodeIds: (await env.DB.prepare("SELECT node_id FROM plan_selected_nodes WHERE plan_id=?").bind(normalizePlanId(user.plan_id)).all()).results.map((r) => r.node_id),
-    availableNodes: availableNodes.results
+    availableNodes: availableNodes.results,
+    subscriptionToken: subToken,
+    subscriptionUrl
   };
 }
 __name(adminUserDetail, "adminUserDetail");
@@ -1838,7 +1849,7 @@ async function adminUpdateUser(request, env, userId) {
     const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(userId).first();
     if (user && Date.parse(user.expires_at) > Date.now()) await provisionUser(env, user);
   }
-  return json(await adminUserDetail(env, userId));
+  return json(await adminUserDetail(request, env, userId));
 }
 __name(adminUpdateUser, "adminUpdateUser");
 __name2(adminUpdateUser, "adminUpdateUser");
@@ -2027,11 +2038,27 @@ async function api(request, env, url) {
     return json({ orders: orders.results, page, hasMore: orders.results.length === 50 });
   }
   if (request.method === "GET" && userDetailMatch) {
-    const detail = await adminUserDetail(env, Number(userDetailMatch[1]));
+    const detail = await adminUserDetail(request, env, Number(userDetailMatch[1]));
     return detail ? json(detail) : json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" }, 404);
   }
   if (request.method === "PATCH" && userDetailMatch) {
     return adminUpdateUser(request, env, Number(userDetailMatch[1]));
+  }
+  const resetTokenMatch = url.pathname.match(/^\/api\/users\/(\d+)\/reset-token$/);
+  if (request.method === "POST" && resetTokenMatch) {
+    const id = Number(resetTokenMatch[1]);
+    const user = await env.DB.prepare("SELECT id FROM users WHERE id=?").bind(id).first();
+    if (!user) return json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" }, 404);
+    const token = randomToken();
+    await env.DB.prepare("UPDATE users SET token_hash=?,token_hint=? WHERE id=?").bind(await hash(token), token.slice(0, 8), id).run();
+    const existingDev = await env.DB.prepare("SELECT id FROM app_devices WHERE user_id=? ORDER BY id DESC LIMIT 1").bind(id).first();
+    if (existingDev) {
+      await env.DB.prepare("UPDATE app_devices SET subscription_token=? WHERE id=?").bind(token, existingDev.id).run();
+    } else {
+      await env.DB.prepare("INSERT INTO app_devices(user_id,device_uuid_hash,subscription_token,platform,app_version,model) VALUES(?,?,?,'web','admin_manual','Admin Manual')").bind(id, await hash(randomToken()), token).run();
+    }
+    const subUrl = `${appPublicBase(request, env)}/api/subscription/${token}`;
+    return json({ ok: true, token, subscriptionUrl: subUrl });
   }
   const accessMatch = url.pathname.match(/^\/api\/users\/(\d+)\/accesses$/);
   if (request.method === "GET" && accessMatch) {
