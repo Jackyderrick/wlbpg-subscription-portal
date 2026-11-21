@@ -5,8 +5,11 @@
   "type": "module",
   "scripts": {
     "check": "tsc --noEmit",
+    "check:cron": "tsc -p tsconfig.cron.json --noEmit",
     "test": "vitest run",
     "deploy": "wrangler deploy",
+    "deploy:app": "wrangler deploy -c wrangler.app.jsonc",
+    "deploy:cron": "wrangler deploy -c wrangler.cron.jsonc",
     "dev": "wrangler dev",
     "types": "wrangler types"
   },

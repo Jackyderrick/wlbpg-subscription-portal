@@ -73,14 +73,30 @@ npx wrangler d1 migrations apply DB --local
 npx wrangler d1 migrations apply DB --remote -c wrangler.app.jsonc
 ```
 
-### 4. 部署到生产环境
-```bash
-# 登录 Cloudflare（首次在新设备执行）
-npx wrangler login
+### 4. 部署到生产环境（双 Worker 架构）
 
-# 部署至生产 Worker (dns-sub-share-app，对应 app.5858188.xyz)
-npx wrangler deploy -c wrangler.app.jsonc
+本系统采用在线业务与后台定时调度完全隔离的**双 Worker 架构**：
+
+- **`dns-sub-share-app`（在线业务 Worker）**：承载客户端启动引导 (`/api/app/bootstrap`)、订阅分发 (`/api/subscription/:token`)、支付回调 (`/api/payment/notify`) 与 Web 管理后台。无 Cron 触发器。
+- **`dns-sub-share-cron`（定时调度 Worker）**：承载定时上游同步 (`7 * * * *`)、自愈巡检与过期表清理 (`*/15 * * * *`)、用户到期处理与匿名试用垃圾数据清理 (`*/5 * * * *`)，以及手动运维接口 (`/health`、`/run`)。
+
+```bash
+# 1. 静态检查
+npm run check:cron   # 定时 Worker 与 Parser 严格 TypeScript 检查 (0 错误)
+npm test             # 运行全量 Vitest 自动化测试套件
+
+# 2. 部署主站业务 Worker (dns-sub-share-app，对应 app.5858188.xyz)
+npm run deploy:app
+
+# 3. 部署独立定时任务 Worker (dns-sub-share-cron)
+npm run deploy:cron
 ```
+
+#### 定时任务 Worker (`dns-sub-share-cron`) 密钥配置
+需通过 `npx wrangler secret put <KEY> -c wrangler.cron.jsonc` 注入：
+- `CF_API_TOKEN`：具备 4 个 DNS 域名池 Zone 编辑权限的 Cloudflare API Token（与主站一致）。
+- `CRON_TRIGGER_SECRET`：手动运维与应急触发接口 (`POST /run?job=...`) 的 Bearer Token。
+- `ALERT_WEBHOOK_URL`（可选）：域名池高水位或异常熔断时的通知 Webhook。
 
 ---
 
@@ -103,3 +119,18 @@ npx wrangler deploy -c wrangler.app.jsonc
 | `PAYMENT_API_BASE` | 易支付网关地址（现网 `https://motionpay.net`） |
 | `PAYMENT_PID` | 易支付商户 ID |
 | `PAYMENT_KEY` | 易支付 MD5 签名密钥 |
+
+---
+
+## 五、Roadmap（待排期功能）
+
+以下功能已完成架构论证，列入后续迭代计划（本次仅归档方案，不涉及代码实现与建表）：
+
+1. **节点连通性探针（方案 B）**：
+   - 国内轻量 `sing-box` 探针定时实测节点真实连接与 TLS 握手延迟。
+   - 探针通过 HMAC/Token 安全上报至 Worker 并写入 `node_health` 状态表。
+   - 驱动定时 Worker 自动摘除高丢包/失联故障节点，并在恢复后重新投入轮询。
+
+2. **用户级流量统计与配额控制**：
+   - **路线一（客户端软控）**：移动端/桌面端定时上报本地累计流量，达到套餐阈值后软性限制连接，实施路径轻量、落地最快。
+   - **路线二（自建中转/家宽落地硬控）**：经由受控落地或前置转发节点抓取真实传输字节数，服务端联动精确限流与熔断。

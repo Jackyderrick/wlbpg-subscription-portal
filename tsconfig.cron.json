@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/cron-worker.ts",
+    "src/parser.ts",
+    "test/cron_worker.test.ts"
+  ]
+}
