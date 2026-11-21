@@ -2,6 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import cronWorker, {
   localizedNodeName,
   normalizePlanId,
+  createBudget,
+  provisionUser,
+  deprovisionUser,
+  syncUpstream,
   Env,
 } from "../src/cron-worker";
 
@@ -132,6 +136,7 @@ describe("独立定时任务 Worker (dns-sub-share-cron) 规范验证", () => {
         CF_API_TOKEN: "tok",
         DNS_SUFFIX: "ddda.dpdns.org",
         CF_ZONE_ID: poolAZone,
+        DNS_CONCURRENCY: "1",
         DNS_POOLS: JSON.stringify([
           { suffix: "pool-a.xyz", zoneId: poolAZone, maxRecords: 100 },
           { suffix: "pool-b.xyz", zoneId: poolBZone, maxRecords: 100 },
@@ -458,7 +463,7 @@ describe("独立定时任务 Worker (dns-sub-share-cron) 规范验证", () => {
                     ],
                   };
                 }
-                if (sql.includes("FROM user_dns_records WHERE user_id=? AND status='active'")) {
+                if (sql.includes("FROM user_dns_records WHERE user_id=? AND status")) {
                   const uid = args[0];
                   return {
                     results: [
@@ -568,6 +573,231 @@ describe("独立定时任务 Worker (dns-sub-share-cron) 规范验证", () => {
         "DELETE FROM app_orders WHERE user_id = ?",
         "DELETE FROM users WHERE id = ?",
       ]);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  // 用例 9: provisionUser 增量补齐与大 ID 节点保护测试 (保留高 ID 节点，不全量覆盖，严禁扫描 status='deleted')
+  it("用例 9: provisionUser 增量补齐与大 ID 节点保护测试 (保留 node_id=50, 51，仅新增 52，不扫描 deleted 记录)", async () => {
+    const executedSqls: string[] = [];
+    const createdDnsLabels: string[] = [];
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async (url: any, init: any) => {
+      const urlStr = String(url);
+      if (init?.method === "POST" && urlStr.includes("/dns_records")) {
+        const body = JSON.parse(init.body);
+        createdDnsLabels.push(body.name);
+        return new Response(JSON.stringify({ success: true, result: { id: "cf-52" } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    };
+
+    try {
+      const mockEnv: Env = {
+        CF_API_TOKEN: "tok",
+        DNS_SUFFIX: "ddda.dpdns.org",
+        CF_ZONE_ID: "zone1",
+        DNS_POOLS: JSON.stringify([{ suffix: "pool.xyz", zoneId: "zone1", maxRecords: 100 }]),
+        DB: {
+          prepare: (sql: string) => {
+            const createStmt = (args: any[]) => ({
+              bind: (...newArgs: any[]) => createStmt(newArgs),
+              run: async () => {
+                executedSqls.push(sql);
+                return { success: true, meta: { changes: 1 } };
+              },
+              first: async () => null,
+              all: async () => {
+                executedSqls.push(sql);
+                if (sql.includes("FROM user_selected_nodes")) return { results: [] };
+                if (sql.includes("FROM plan_selected_nodes")) return { results: [] };
+                if (sql.includes("FROM user_dns_records") && sql.includes("status='error'")) return { results: [] };
+                if (sql.includes("FROM user_dns_records") && sql.includes("status='active'")) {
+                  // 用户现有 node_id 为 50 和 51 的活跃节点
+                  return {
+                    results: [
+                      { id: 501, node_id: 50, cloudflare_record_id: "cf-50", zone_id: "zone1", status: "active" },
+                      { id: 502, node_id: 51, cloudflare_record_id: "cf-51", zone_id: "zone1", status: "active" },
+                    ],
+                  };
+                }
+                if (sql.includes("FROM nodes") && sql.includes("WHERE upstream_id=? AND active=1")) {
+                  // 补齐缺口返回 node_id = 52
+                  return {
+                    results: [
+                      { id: 52, fingerprint: "fp52", name: "Node 52", protocol: "vless", original_server: "1.1.1.1", original_uri: "vless://52" },
+                    ],
+                  };
+                }
+                if (sql.includes("SELECT COALESCE(zone_id, ?) zone_id, status, COUNT(*) total FROM user_dns_records")) {
+                  return { results: [{ zone_id: "zone1", status: "active", total: 10 }] };
+                }
+                return { results: [] };
+              },
+            });
+            return createStmt([]);
+          },
+        } as any,
+      };
+
+      const user = {
+        id: 70,
+        name: "User 70",
+        upstream_id: 1,
+        expires_at: "2028-01-01T00:00:00Z",
+        status: "active",
+        node_limit: 3,
+        plan_id: "trial",
+        dns_revision: 0,
+      };
+
+      const budget = createBudget(mockEnv);
+      const res = await provisionUser(mockEnv, user as any, { prune: true, budget });
+
+      // 验证仅新增 1 个节点，没有删除节点
+      expect(res).toEqual({ created: 1, pruned: 0 });
+      // 验证创建的 DNS 针对 node 52
+      expect(createdDnsLabels.length).toBe(1);
+      expect(createdDnsLabels[0]).toContain("-52.");
+      // 验证没有 SELECT 扫描 status='deleted' 历史数据
+      const selectQueries = executedSqls.filter((s) => s.trim().startsWith("SELECT"));
+      for (const q of selectQueries) {
+        expect(q).not.toContain("status='deleted'");
+      }
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  // 用例 10: syncUpstream 兼容 manual://stored 测试 (不向外请求，不重置 active=0，返回现有活跃节点数)
+  it("用例 10: syncUpstream 兼容 manual://stored 测试 (安全保留存储节点，更新 last_synced_at 并清空 last_error)", async () => {
+    let fetchCalled = false;
+    const executedSqls: string[] = [];
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async () => {
+      fetchCalled = true;
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    };
+
+    try {
+      const mockEnv: Env = {
+        CF_API_TOKEN: "tok",
+        DNS_SUFFIX: "ddda.dpdns.org",
+        CF_ZONE_ID: "zone1",
+        DB: {
+          prepare: (sql: string) => {
+            const createStmt = (args: any[]) => ({
+              bind: (...newArgs: any[]) => createStmt(newArgs),
+              run: async () => {
+                executedSqls.push(sql);
+                return { success: true, meta: { changes: 1 } };
+              },
+              first: async () => {
+                executedSqls.push(sql);
+                if (sql.includes("FROM upstreams WHERE id=?")) {
+                  return { id: 2, subscription_url: "manual://stored" };
+                }
+                if (sql.includes("COUNT(*) AS count FROM nodes WHERE upstream_id=? AND active=1")) {
+                  return { count: 8 };
+                }
+                return null;
+              },
+              all: async () => {
+                executedSqls.push(sql);
+                return { results: [] };
+              },
+            });
+            return createStmt([]);
+          },
+        } as any,
+      };
+
+      const count = await syncUpstream(mockEnv, 2);
+
+      // 返回现有活跃节点数量 8
+      expect(count).toBe(8);
+      // manual://stored 不应发起任何外部 HTTP 请求
+      expect(fetchCalled).toBe(false);
+      // 绝不能将 nodes 批量置为 active=0
+      expect(executedSqls.some((s) => s.includes("UPDATE nodes SET active=0"))).toBe(false);
+      // 正确更新 upstreams 表时间并清空 last_error
+      expect(
+        executedSqls.some(
+          (s) => s.includes("UPDATE upstreams SET last_synced_at=CURRENT_TIMESTAMP, last_error=NULL WHERE id=?")
+        )
+      ).toBe(true);
+    } finally {
+      globalThis.fetch = origFetch;
+    }
+  });
+
+  // 用例 11: deprovisionUser 同时清理 active 与 error 记录测试
+  it("用例 11: deprovisionUser 同时清理 active 与 error 记录 (无 CF 记录 ID 直接置 deleted 不占 budget，有 CF ID 调 API 删除)", async () => {
+    const deletedDnsRecords: string[] = [];
+    const executedSqls: string[] = [];
+
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async (url: any, init: any) => {
+      const urlStr = String(url);
+      if (init?.method === "DELETE" && urlStr.includes("/dns_records/")) {
+        const id = urlStr.split("/dns_records/")[1];
+        deletedDnsRecords.push(id);
+        return new Response(JSON.stringify({ success: true, result: { id } }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ success: true }), { status: 200 });
+    };
+
+    try {
+      const mockEnv: Env = {
+        CF_API_TOKEN: "tok",
+        DNS_SUFFIX: "ddda.dpdns.org",
+        CF_ZONE_ID: "zone1",
+        DB: {
+          prepare: (sql: string) => {
+            const createStmt = (args: any[]) => ({
+              bind: (...newArgs: any[]) => createStmt(newArgs),
+              run: async () => {
+                executedSqls.push(sql);
+                return { success: true, meta: { changes: 1 } };
+              },
+              first: async () => null,
+              all: async () => {
+                executedSqls.push(sql);
+                if (sql.includes("FROM user_dns_records WHERE user_id=? AND status IN ('active', 'error')")) {
+                  return {
+                    results: [
+                      { id: 101, cloudflare_record_id: "cf-active-101", zone_id: "zone1", status: "active" },
+                      { id: 102, cloudflare_record_id: "cf-error-102", zone_id: "zone1", status: "error" },
+                      { id: 103, cloudflare_record_id: null, zone_id: "zone1", status: "error" },
+                    ],
+                  };
+                }
+                return { results: [] };
+              },
+            });
+            return createStmt([]);
+          },
+        } as any,
+      };
+
+      const budget = createBudget(mockEnv);
+      const res = await deprovisionUser(mockEnv, 40, budget);
+
+      // 验证 3 条记录均成功处理
+      expect(res).toEqual({ removed: 3, failed: 0, aborted: false });
+      // 验证仅对具有 cloudflare_record_id 的 2 条记录调用 Cloudflare DELETE API
+      expect(deletedDnsRecords).toEqual(["cf-active-101", "cf-error-102"]);
+      // budget.count 应该仅为 2（无 CF 记录的不消耗 subrequest 预算）
+      expect(budget.count).toBe(2);
+      // 验证执行了批量直接清理 null cloudflare_record_id 的优化 SQL
+      expect(
+        executedSqls.some((s) =>
+          s.includes("UPDATE user_dns_records SET status='deleted'") && s.includes("status='error'") && s.includes("cloudflare_record_id IS NULL")
+        )
+      ).toBe(true);
     } finally {
       globalThis.fetch = origFetch;
     }

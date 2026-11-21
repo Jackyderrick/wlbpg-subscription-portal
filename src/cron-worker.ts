@@ -306,7 +306,8 @@ export async function provisionUser(
   user: UserRow,
   { prune = true, budget }: { prune?: boolean; budget: Budget }
 ): Promise<{ created: number; pruned: number }> {
-  const targetLimit = Math.max(1, Number(user.node_limit || 5));
+  const concurrency = Math.max(1, Math.min(5, Number(env.DNS_CONCURRENCY || 4)));
+  const targetLimit = Math.max(1, Math.min(20, Number(user.node_limit || 10)));
   const planId = normalizePlanId(user.plan_id);
 
   const selectedNodeRows = await env.DB.prepare(
@@ -314,66 +315,88 @@ export async function provisionUser(
   )
     .bind(user.id)
     .all<{ node_id: number }>();
-  let selectedIds = (selectedNodeRows.results || []).map((r) => r.node_id);
+  let rawAllowedIds = (selectedNodeRows.results || []).map((r) => Number(r.node_id));
 
-  if (!selectedIds.length) {
-    const planNodeRows = await env.DB.prepare(
-      "SELECT node_id FROM plan_selected_nodes WHERE plan_id=?"
-    )
-      .bind(planId)
-      .all<{ node_id: number }>();
-    selectedIds = (planNodeRows.results || []).map((r) => r.node_id);
+  if (!rawAllowedIds.length) {
+    try {
+      const planNodeRows = await env.DB.prepare(
+        "SELECT node_id FROM plan_selected_nodes WHERE plan_id=?"
+      )
+        .bind(planId)
+        .all<{ node_id: number }>();
+      rawAllowedIds = (planNodeRows.results || []).map((r) => Number(r.node_id));
+    } catch {}
   }
 
-  let nodes: { results?: NodeRow[] };
-  if (selectedIds.length > 0) {
-    const placeholders = selectedIds.map(() => "?").join(",");
-    nodes = await env.DB.prepare(
-      `SELECT id, fingerprint, name, protocol, original_server, original_uri FROM nodes
-       WHERE id IN (${placeholders}) AND active=1
-       ORDER BY id ASC LIMIT ?`
+  let allowedIds: number[] = [];
+  if (rawAllowedIds.length > 0) {
+    const placeholders = rawAllowedIds.map(() => "?").join(",");
+    const resolved = await env.DB.prepare(
+      `SELECT DISTINCT n_act.id FROM nodes n_sel
+       JOIN nodes n_act ON (n_act.id = n_sel.id OR (n_act.upstream_id = n_sel.upstream_id AND n_act.name = n_sel.name))
+       WHERE n_sel.id IN (${placeholders}) AND n_act.active = 1`
     )
-      .bind(...selectedIds, targetLimit)
-      .all<NodeRow>();
-  } else {
-    nodes = await env.DB.prepare(
-      `SELECT id, fingerprint, name, protocol, original_server, original_uri FROM nodes
-       WHERE upstream_id=? AND active=1
-       ORDER BY id ASC LIMIT ?`
-    )
-      .bind(user.upstream_id, targetLimit)
-      .all<NodeRow>();
+      .bind(...rawAllowedIds)
+      .all<{ id: number }>();
+    allowedIds = (resolved.results || []).map((r) => Number(r.id));
   }
 
-  let pruned = 0;
-  if (prune) {
-    const currentRows = await env.DB.prepare(
-      "SELECT id, node_id, cloudflare_record_id, zone_id, status FROM user_dns_records WHERE user_id=?"
+  // 清理 error 记录时：先一条 SQL 批量把 status='error' AND (cloudflare_record_id IS NULL OR cloudflare_record_id='') 置为 deleted
+  try {
+    await env.DB.prepare(
+      "UPDATE user_dns_records SET status='deleted', cloudflare_record_id=NULL, last_error=NULL WHERE user_id=? AND status='error' AND (cloudflare_record_id IS NULL OR cloudflare_record_id='')"
     )
       .bind(user.id)
-      .all<{ id: number; node_id: number; cloudflare_record_id: string | null; zone_id: string | null; status: string }>();
+      .run();
+  } catch {}
 
-    const targetNodeIds = new Set((nodes.results || []).map((n) => n.id));
-    for (const row of currentRows.results || []) {
-      if (!targetNodeIds.has(row.node_id) || row.status === "error") {
-        if (!row.cloudflare_record_id) {
-          await env.DB.prepare(
-            "UPDATE user_dns_records SET status='deleted', cloudflare_record_id=NULL, last_error=NULL WHERE id=?"
-          )
-            .bind(row.id)
-            .run();
-          pruned++;
-          continue;
+  // 仅对 status='error' AND cloudflare_record_id IS NOT NULL 的记录调 deleteDns（严禁扫描 status='deleted' 历史行！）
+  const errorRows = await env.DB.prepare(
+    "SELECT id, node_id, cloudflare_record_id, zone_id FROM user_dns_records WHERE user_id=? AND status='error' AND cloudflare_record_id IS NOT NULL AND cloudflare_record_id != ''"
+  )
+    .bind(user.id)
+    .all<{ id: number; node_id: number; cloudflare_record_id: string; zone_id: string | null }>();
+
+  await runWithConcurrency(errorRows.results || [], concurrency, async (erow) => {
+    if (budget.count >= budget.limit || budget.rateLimited) return;
+    try {
+      await deleteDns(env, erow.zone_id || env.CF_ZONE_ID, erow.cloudflare_record_id, budget);
+      await env.DB.prepare(
+        "UPDATE user_dns_records SET status='deleted', cloudflare_record_id=NULL, last_error=NULL WHERE id=?"
+      )
+        .bind(erow.id)
+        .run();
+    } catch {}
+  });
+
+  // 严禁使用 ORDER BY id ASC LIMIT 覆盖用户已有有效节点：先查用户现有 status='active' 记录
+  const activeRows = await env.DB.prepare(
+    "SELECT id, node_id, cloudflare_record_id, zone_id FROM user_dns_records WHERE user_id=? AND status='active' ORDER BY created_at, id"
+  )
+    .bind(user.id)
+    .all<{ id: number; node_id: number; cloudflare_record_id: string | null; zone_id: string | null }>();
+
+  let active = activeRows.results || [];
+  let disallowedRemoved = 0;
+
+  // 仅当 rawAllowedIds.length > 0 且 prune=true 时，删掉不在 allowedIds 里的违规 active 记录
+  if (prune && rawAllowedIds.length > 0) {
+    const disallowed = active.filter((row) => !allowedIds.includes(Number(row.node_id)));
+    const kept = active.filter((row) => allowedIds.includes(Number(row.node_id)));
+    if (disallowed.length > 0) {
+      await runWithConcurrency(disallowed, concurrency, async (row) => {
+        if (budget.count >= budget.limit || budget.rateLimited) {
+          kept.push(row);
+          return;
         }
-        if (budget.count >= budget.limit || budget.rateLimited) continue;
         try {
-          await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id, budget);
+          await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "", budget);
           await env.DB.prepare(
             "UPDATE user_dns_records SET status='deleted', cloudflare_record_id=NULL, last_error=NULL WHERE id=?"
           )
             .bind(row.id)
             .run();
-          pruned++;
+          disallowedRemoved++;
         } catch (error) {
           if (!isBudgetAbort(budget, error)) {
             await env.DB.prepare(
@@ -383,8 +406,81 @@ export async function provisionUser(
               .run();
           }
         }
-      }
+      });
     }
+    active = kept;
+  }
+
+  async function pruneExtras(): Promise<number> {
+    if (!prune) return 0;
+    const latest = await env.DB.prepare(
+      "SELECT id, cloudflare_record_id, zone_id FROM user_dns_records WHERE user_id=? AND status='active' ORDER BY created_at, id"
+    )
+      .bind(user.id)
+      .all<{ id: number; cloudflare_record_id: string | null; zone_id: string | null }>();
+    const extras = (latest.results || []).slice(targetLimit);
+    let removed = 0;
+    await runWithConcurrency(extras, concurrency, async (row) => {
+      if (budget.count >= budget.limit || budget.rateLimited) return;
+      try {
+        await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "", budget);
+        await env.DB.prepare(
+          "UPDATE user_dns_records SET status='deleted', cloudflare_record_id=NULL, last_error=NULL WHERE id=?"
+        )
+          .bind(row.id)
+          .run();
+        removed++;
+      } catch (error) {
+        if (!isBudgetAbort(budget, error)) {
+          await env.DB.prepare(
+            "UPDATE user_dns_records SET status='error', last_error=? WHERE id=?"
+          )
+            .bind(error instanceof Error ? error.message : String(error), row.id)
+            .run();
+        }
+      }
+    });
+    return removed;
+  }
+
+  // 超上限时删超出 targetLimit 的多余记录
+  if (active.length >= targetLimit) {
+    const extraPruned = await pruneExtras();
+    return { created: 0, pruned: disallowedRemoved + extraPruned };
+  }
+
+  // 计算缺口 fill = targetLimit - active.length，若 fill <= 0 直接返回
+  const fill = targetLimit - active.length;
+  if (fill <= 0) {
+    const extraPruned = await pruneExtras();
+    return { created: 0, pruned: disallowedRemoved + extraPruned };
+  }
+
+  // 仅查询 NOT IN (activeNodeIds) 的活跃节点 ORDER BY RANDOM() LIMIT fill
+  const activeNodeIds = active.map((row) => Number(row.node_id));
+  const excludeSql = activeNodeIds.length ? ` AND id NOT IN (${activeNodeIds.map(() => "?").join(",")})` : "";
+  let nodes: { results?: NodeRow[] };
+
+  if (rawAllowedIds.length > 0) {
+    if (allowedIds.length > 0) {
+      nodes = await env.DB.prepare(
+        `SELECT id, fingerprint, name, protocol, original_server, original_uri FROM nodes
+         WHERE active=1 AND id IN (${allowedIds.map(() => "?").join(",")})${excludeSql}
+         ORDER BY RANDOM() LIMIT ?`
+      )
+        .bind(...allowedIds, ...activeNodeIds, fill)
+        .all<NodeRow>();
+    } else {
+      nodes = { results: [] };
+    }
+  } else {
+    nodes = await env.DB.prepare(
+      `SELECT id, fingerprint, name, protocol, original_server, original_uri FROM nodes
+       WHERE upstream_id=? AND active=1${excludeSql}
+       ORDER BY RANDOM() LIMIT ?`
+    )
+      .bind(user.upstream_id, ...activeNodeIds, fill)
+      .all<NodeRow>();
   }
 
   const allPools = dnsPools(env);
@@ -392,14 +488,15 @@ export async function provisionUser(
   const failedZoneIds = new Set<string>();
   let created = 0;
 
-  for (const node of nodes.results || []) {
-    if (budget.count >= budget.limit || budget.rateLimited) break;
+  // 使用 runWithConcurrency 并发创建（保持外层共享 failedZoneIds、预占回滚与 abortedByBudget 保护不变）
+  await runWithConcurrency(nodes.results || [], concurrency, async (node) => {
+    if (budget.count >= budget.limit || budget.rateLimited) return;
     const existing = await env.DB.prepare(
       "SELECT id, status FROM user_dns_records WHERE user_id=? AND node_id=?"
     )
       .bind(user.id, node.id)
       .first<{ id: number; status: string }>();
-    if (existing?.status === "active") continue;
+    if (existing?.status === "active") return;
 
     const label = `u${user.id}-r${user.dns_revision}-${node.fingerprint.slice(0, 10)}-${node.id}`;
     let recordCreated = false;
@@ -479,9 +576,10 @@ export async function provisionUser(
         )
         .run();
     }
-  }
+  });
 
-  return { created, pruned };
+  const extraPruned = await pruneExtras();
+  return { created, pruned: disallowedRemoved + extraPruned };
 }
 
 export async function deprovisionUser(
@@ -489,23 +587,42 @@ export async function deprovisionUser(
   userId: number,
   budget: Budget
 ): Promise<{ removed: number; failed: number; aborted: boolean }> {
+  // 对无 cloudflare_record_id 的 error 行直接置为 deleted（不消耗 budget）
+  try {
+    await env.DB.prepare(
+      "UPDATE user_dns_records SET status='deleted', cloudflare_record_id=NULL, last_error=NULL WHERE user_id=? AND status='error' AND (cloudflare_record_id IS NULL OR cloudflare_record_id='')"
+    )
+      .bind(userId)
+      .run();
+  } catch {}
+
   const records = await env.DB.prepare(
-    "SELECT id, cloudflare_record_id, zone_id FROM user_dns_records WHERE user_id=? AND status='active'"
+    "SELECT id, cloudflare_record_id, zone_id, status FROM user_dns_records WHERE user_id=? AND status IN ('active', 'error')"
   )
     .bind(userId)
-    .all<{ id: number; cloudflare_record_id: string | null; zone_id: string | null }>();
+    .all<{ id: number; cloudflare_record_id: string | null; zone_id: string | null; status: string }>();
 
   let removed = 0;
   let failed = 0;
   let aborted = false;
 
   for (const row of records.results || []) {
+    if (!row.cloudflare_record_id) {
+      await env.DB.prepare(
+        "UPDATE user_dns_records SET status='deleted', cloudflare_record_id=NULL, last_error=NULL WHERE id=?"
+      )
+        .bind(row.id)
+        .run();
+      removed++;
+      continue;
+    }
+
     if (budget.count >= budget.limit || budget.rateLimited) {
       aborted = true;
       break;
     }
     try {
-      await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "", budget);
+      await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id, budget);
       await env.DB.prepare(
         "UPDATE user_dns_records SET status='deleted', cloudflare_record_id=NULL, last_error=NULL WHERE id=?"
       )
@@ -558,7 +675,22 @@ export async function syncUpstream(env: Env, upstreamId: number): Promise<number
   let nodes: Array<{ fingerprint: string; name: string; protocol: string; server: string; originalUri: string }> = [];
 
   if (upstream.subscription_url.startsWith("manual://")) {
-    const raw = decodeBase64Utf8(upstream.subscription_url.slice(9));
+    const b64 = upstream.subscription_url.slice(9).trim();
+    if (!b64 || b64 === "stored") {
+      const activeCountRow = await env.DB.prepare(
+        "SELECT COUNT(*) AS count FROM nodes WHERE upstream_id=? AND active=1"
+      )
+        .bind(upstreamId)
+        .first<{ count: number }>();
+      const count = Number(activeCountRow?.count ?? 0);
+      await env.DB.prepare(
+        "UPDATE upstreams SET last_synced_at=CURRENT_TIMESTAMP, last_error=NULL WHERE id=?"
+      )
+        .bind(upstreamId)
+        .run();
+      return count;
+    }
+    const raw = decodeBase64Utf8(b64);
     nodes = await parseSubscription(raw);
   } else {
     const res = await fetch(upstream.subscription_url, {
