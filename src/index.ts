@@ -225,7 +225,7 @@ function renderDetail(){
   '<details class="extra-details"><summary>\u8BBE\u5907\u3001\u8BA2\u5355\u4E0E\u8282\u70B9\u660E\u7EC6</summary><p class="muted">\u8282\u70B9\u989D\u5EA6\uFF1A'+Number(u.node_limit)+'</p><div class="detail-tabs">'+['devices','orders','dns'].map((v,i)=>'<button data-detail-tab="'+v+'" class="'+(detailTab===v?'primary':'')+'">'+['\u8BBE\u5907','\u8BA2\u5355','DNS'][i]+'</button>').join('')+'</div><div class="detail-list" id="detailItems"></div></details>';
   renderDetailItems();preview();
 }
-function renderDetailItems(){const rows=detailTab==='devices'?detail.devices:detailTab==='orders'?detail.orders:detail.dnsRecords;$('#detailItems').innerHTML=rows.map(r=>'<div class="detail-item">'+(detailTab==='devices'?'<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><strong>'+esc(r.model||r.platform||'\u672A\u77E5\u8BBE\u5907')+'</strong><p>\u8BBE\u5907 ID\uFF1A#'+esc(r.id)+' \xB7 '+esc(r.platform||'')+'</p><p class="muted">\u6700\u8FD1\u5728\u7EBF '+fmt(r.last_seen_at)+'</p></div><button class="link danger" data-kick-device="'+r.id+'">\u8E22\u4E0B\u7EBF</button></div>':detailTab==='orders'?'<strong>'+esc(r.order_no)+'</strong><p>'+esc(r.plan_id)+' \xB7 '+esc(orderStatus(r.status))+' \xB7 '+(r.amount_cents/100).toFixed(2)+' '+esc(r.currency)+'</p>':'<strong>'+esc(r.hostname)+'</strong><p>'+esc(r.node_name)+' \xB7 '+esc(r.status)+'</p>')+'</div>').join('')||'<p class="muted">\u6682\u65E0\u8BB0\u5F55</p>'}
+function renderDetailItems(){const rows=detailTab==='devices'?detail.devices:detailTab==='orders'?detail.orders:detail.dnsRecords;$('#detailItems').innerHTML=rows.map(r=>'<div class="detail-item">'+(detailTab==='devices'?'<div style="display:flex;justify-content:space-between;align-items:flex-start"><div><strong>'+esc(r.model||r.platform||'\u672A\u77E5\u8BBE\u5907')+'</strong><p>\u8BBE\u5907 ID\uFF1A#'+esc(r.id)+' \xB7 '+esc(r.platform||'')+'</p><p class="muted">\u6700\u8FD1\u5728\u7EBF '+fmt(r.last_seen_at)+'</p></div><button class="link danger" data-kick-device="'+r.id+'">\u8E22\u4E0B\u7EBF</button></div>':detailTab==='orders'?'<strong>'+esc(r.order_no)+'</strong><p>'+esc(r.plan_id)+' \xB7 '+esc(orderStatus(r.status))+' \xB7 '+(r.amount_cents/100).toFixed(2)+' '+esc(r.currency)+'</p>':'<strong>'+esc(r.hostname)+'</strong><p>'+esc(r.node_name)+' \xB7 '+esc(r.status)+'</p>'+(r.last_error?'<p class="danger" style="font-size:12px;margin:2px 0 0;word-break:break-all">'+esc(r.last_error)+'</p>':''))+'</div>').join('')||'<p class="muted">\u6682\u65E0\u8BB0\u5F55</p>'}
 function expiry(){const count=days||Number($('#dayCount')?.value);if(!Number.isInteger(count)||count<1||count>3650)throw new Error('\u7EED\u671F\u5929\u6570\u5FC5\u987B\u4E3A 1 \u5230 3650 \u7684\u6574\u6570');return new Date(Math.max(now(),Date.parse(stamp(detail.user.expires_at)))+count*86400000).toISOString()}
 function preview(){try{$('#renewPreview').textContent=fmt(expiry())}catch{$('#renewPreview').textContent='\u8BF7\u8F93\u5165\u6709\u6548\u5929\u6570'}}
 const orderStatus=s=>({paid:'\u5DF2\u652F\u4ED8',pending:'\u5F85\u652F\u4ED8',created:'\u5F85\u652F\u4ED8',cancelled:'\u5DF2\u53D6\u6D88',failed:'\u5931\u8D25',expired:'\u5DF2\u8FC7\u671F'}[s]||s);
@@ -676,6 +676,7 @@ __name(randomCode, "randomCode");
 __name2(randomCode, "randomCode");
 __name22(randomCode, "randomCode");
 async function secureEqual(a, b) {
+  if (typeof a !== "string" || typeof b !== "string" || !a || !b) return false;
   const [ah, bh] = await Promise.all([hash(a), hash(b)]);
   let diff = 0;
   for (let i = 0; i < ah.length; i++) diff |= ah.charCodeAt(i) ^ bh.charCodeAt(i);
@@ -685,8 +686,10 @@ __name(secureEqual, "secureEqual");
 __name2(secureEqual, "secureEqual");
 __name22(secureEqual, "secureEqual");
 async function authorized(request, env) {
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  return secureEqual(supplied, env.ADMIN_SECRET);
+  const secret = String(env.ADMIN_SECRET ?? "").trim();
+  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
+  if (!secret || !supplied) return false;
+  return secureEqual(supplied, secret);
 }
 __name(authorized, "authorized");
 __name2(authorized, "authorized");
@@ -984,13 +987,23 @@ async function deleteDns(env, zoneId, recordId) {
 __name(deleteDns, "deleteDns");
 __name2(deleteDns, "deleteDns");
 __name22(deleteDns, "deleteDns");
-async function pickDnsPool(env) {
-  const pools = dnsPools(env);
-  const usage = await env.DB.prepare("SELECT COALESCE(zone_id, ?) zone_id, COUNT(*) total FROM user_dns_records WHERE status='active' GROUP BY COALESCE(zone_id, ?)").bind(env.CF_ZONE_ID, env.CF_ZONE_ID).all();
-  const counts = new Map(usage.results.map((row) => [row.zone_id, Number(row.total)]));
-  const available = pools.filter((pool) => (counts.get(pool.zoneId) || 0) < pool.maxRecords);
+async function pickDnsPool(env, excludedZoneIds = new Set()) {
+  const pools = dnsPools(env).filter((p) => !excludedZoneIds.has(p.zoneId));
+  if (!pools.length) throw new Error("\u6240\u6709\u53EF\u7528\u8282\u70B9\u57DF\u540D\u6C60\u5747\u5DF2\u6392\u9664\u6216\u5BB9\u91CF\u4E0A\u9650");
+  const usage = await env.DB.prepare("SELECT COALESCE(zone_id, ?) zone_id, status, COUNT(*) total FROM user_dns_records GROUP BY COALESCE(zone_id, ?), status").bind(env.CF_ZONE_ID, env.CF_ZONE_ID).all();
+  const activeCounts = new Map();
+  const errorCounts = new Map();
+  for (const row of usage.results || []) {
+    if (row.status === "active") activeCounts.set(row.zone_id, Number(row.total));
+    else if (row.status === "error") errorCounts.set(row.zone_id, Number(row.total));
+  }
+  const available = pools.filter((pool) => (activeCounts.get(pool.zoneId) || 0) < pool.maxRecords);
   if (!available.length) throw new Error("\u6240\u6709\u8282\u70B9\u57DF\u540D\u6C60\u5747\u5DF2\u8FBE\u5230\u5BB9\u91CF\u4E0A\u9650");
-  return available.sort((a, b) => (counts.get(a.zoneId) || 0) / a.maxRecords - (counts.get(b.zoneId) || 0) / b.maxRecords)[0];
+  return available.sort((a, b) => {
+    const loadA = ((activeCounts.get(a.zoneId) || 0) + (errorCounts.get(a.zoneId) || 0) * 2) / a.maxRecords;
+    const loadB = ((activeCounts.get(b.zoneId) || 0) + (errorCounts.get(b.zoneId) || 0) * 2) / b.maxRecords;
+    return loadA - loadB;
+  })[0];
 }
 __name(pickDnsPool, "pickDnsPool");
 __name2(pickDnsPool, "pickDnsPool");
@@ -1128,6 +1141,9 @@ async function provisionUser(env, user, { prune = true } = {}) {
       WHERE n_sel.id IN (${rawAllowedIds.map(() => "?").join(",")}) AND n_act.active = 1`).bind(...rawAllowedIds).all();
     allowedIds = (resolved.results || []).map((r) => Number(r.id));
   }
+  try {
+    await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE user_id=? AND status='error' AND (cloudflare_record_id IS NULL OR cloudflare_record_id='')").bind(user.id).run();
+  } catch {}
   const errorRows = await env.DB.prepare("SELECT id,node_id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='error'").bind(user.id).all();
   for (const erow of errorRows.results || []) {
     if ((env.__subrequests || 0) >= 38) break;
@@ -1192,23 +1208,47 @@ async function provisionUser(env, user, { prune = true } = {}) {
   const excludeSql = activeNodeIds.length ? ` AND id NOT IN (${activeNodeIds.map(() => "?").join(",")})` : "";
   const nodes = rawAllowedIds.length ? (allowedIds.length ? await env.DB.prepare(`SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes WHERE active=1 AND id IN (${allowedIds.map(() => "?").join(",")})${excludeSql} ORDER BY RANDOM() LIMIT ?`).bind(...allowedIds, ...activeNodeIds, fill).all() : { results: [] }) : await env.DB.prepare(`SELECT id,fingerprint,name,protocol,original_server,original_uri FROM nodes WHERE upstream_id=? AND active=1${excludeSql} ORDER BY RANDOM() LIMIT ?`).bind(user.upstream_id, ...activeNodeIds, fill).all();
   let created = 0, failed = 0;
+  const allPools = dnsPools(env);
   for (const node of nodes.results) {
+    if ((env.__subrequests || 0) >= 38) break;
     const existing = await env.DB.prepare("SELECT id,status FROM user_dns_records WHERE user_id=? AND node_id=?").bind(user.id, node.id).first();
     if (existing?.status === "active") continue;
     const label = `u${user.id}-r${user.dns_revision}-${node.fingerprint.slice(0, 10)}-${node.id}`;
-    const pool = await pickDnsPool(env);
-    const hostname = `${label}.${pool.suffix}`;
-    try {
-      const recordId = await createDns(env, pool, hostname, node.original_server);
-      await env.DB.prepare(`INSERT INTO user_dns_records(user_id,node_id,hostname,record_type,record_content,cloudflare_record_id,zone_id,status,last_error)
-        VALUES(?,?,?,?,?,?,?, 'active',NULL)
-        ON CONFLICT(user_id,node_id) DO UPDATE SET hostname=excluded.hostname,record_type=excluded.record_type,record_content=excluded.record_content,cloudflare_record_id=excluded.cloudflare_record_id,zone_id=excluded.zone_id,status='active',last_error=NULL`).bind(user.id, node.id, hostname, dnsType(node.original_server), node.original_server, recordId, pool.zoneId).run();
-      created++;
-    } catch (error) {
+    const failedZoneIds = new Set();
+    let recordCreated = false;
+    let lastErrorMsg = "";
+    let lastZoneId = "";
+    let lastHostname = "";
+
+    while (failedZoneIds.size < allPools.length) {
+      if ((env.__subrequests || 0) >= 38) break;
+      let pool;
+      try {
+        pool = await pickDnsPool(env, failedZoneIds);
+      } catch {
+        break;
+      }
+      lastZoneId = pool.zoneId;
+      lastHostname = `${label}.${pool.suffix}`;
+      try {
+        const recordId = await createDns(env, pool, lastHostname, node.original_server);
+        await env.DB.prepare(`INSERT INTO user_dns_records(user_id,node_id,hostname,record_type,record_content,cloudflare_record_id,zone_id,status,last_error)
+          VALUES(?,?,?,?,?,?,?, 'active',NULL)
+          ON CONFLICT(user_id,node_id) DO UPDATE SET hostname=excluded.hostname,record_type=excluded.record_type,record_content=excluded.record_content,cloudflare_record_id=excluded.cloudflare_record_id,zone_id=excluded.zone_id,status='active',last_error=NULL`).bind(user.id, node.id, lastHostname, dnsType(node.original_server), node.original_server, recordId, pool.zoneId).run();
+        created++;
+        recordCreated = true;
+        break;
+      } catch (error) {
+        failedZoneIds.add(pool.zoneId);
+        lastErrorMsg = error instanceof Error ? error.message : String(error);
+        if (lastErrorMsg.includes("subrequest")) break;
+      }
+    }
+
+    if (!recordCreated) {
       failed++;
-      const message = error instanceof Error ? error.message : String(error);
       await env.DB.prepare(`INSERT INTO user_dns_records(user_id,node_id,hostname,record_type,record_content,zone_id,status,last_error)
-        VALUES(?,?,?,?,?,?,'error',?) ON CONFLICT(user_id,node_id) DO UPDATE SET status='error',last_error=excluded.last_error,zone_id=excluded.zone_id`).bind(user.id, node.id, hostname, dnsType(node.original_server), node.original_server, pool.zoneId, message).run();
+        VALUES(?,?,?,?,?,?,'error',?) ON CONFLICT(user_id,node_id) DO UPDATE SET status='error',last_error=excluded.last_error,zone_id=excluded.zone_id`).bind(user.id, node.id, lastHostname || `${label}.failed`, dnsType(node.original_server), node.original_server, lastZoneId || env.CF_ZONE_ID, lastErrorMsg || "All pools failed").run();
     }
   }
   const pruned = await pruneExtras();
@@ -1671,6 +1711,9 @@ async function appPaymentCallback(request, env) {
   const providerOrderId = String(values.trade_no || "");
   if (order.status === "paid") {
     const existing = await env.DB.prepare("SELECT order_id,applied_at FROM app_order_grants WHERE order_id=?").bind(order.id).first();
+    if (existing?.applied_at) {
+      return new Response("success", { headers: { "content-type": "text/plain; charset=utf-8" } });
+    }
     if (!existing) {
       try {
         const legacy = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(order.user_id).first();
@@ -1699,9 +1742,8 @@ async function appPaymentCallback(request, env) {
     await env.DB.prepare("UPDATE app_order_grants SET expires_at=(SELECT expires_at FROM users WHERE id=?) WHERE order_id=?").bind(order.user_id, order.id).run();
   }
   try {
-    if (plan.id !== "trial_1d") await deprovisionUser(env, order.user_id);
     const updated = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(order.user_id).first();
-    if (updated) await provisionUser(env, updated);
+    if (updated) await provisionUser(env, updated, { prune: true });
   } catch (error) {
     console.log(JSON.stringify({ event: "payment_provision_error", order: order.order_no, error: error instanceof Error ? error.message : String(error) }));
   }
@@ -2164,7 +2206,7 @@ __name(api, "api");
 __name2(api, "api");
 __name22(api, "api");
 async function subscription(request, env, token) {
-  const user = await env.DB.prepare("SELECT id,status,expires_at FROM users WHERE token_hash=?").bind(await hash(token)).first();
+  const user = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,COALESCE(plan_id, 'trial_1d') plan_id,dns_revision FROM users WHERE token_hash=?").bind(await hash(token)).first();
   if (!user) return new Response("\u8BA2\u9605\u4E0D\u5B58\u5728", { status: 404 });
   if (user.status !== "active" || Date.parse(user.expires_at) <= Date.now()) {
     if (user.status === "active") {
@@ -2174,9 +2216,18 @@ async function subscription(request, env, token) {
     return new Response("\u8BA2\u9605\u5DF2\u5230\u671F\u6216\u505C\u7528", { status: 410 });
   }
   await recordSubscriptionAccess(request, env, user.id);
-  const rows = await env.DB.prepare(`SELECT n.name,n.protocol,n.original_uri,d.hostname FROM user_dns_records d JOIN nodes n ON n.id=d.node_id
+  let rows = await env.DB.prepare(`SELECT n.name,n.protocol,n.original_uri,d.hostname FROM user_dns_records d JOIN nodes n ON n.id=d.node_id
     WHERE d.user_id=? AND d.status='active' AND n.active=1 ORDER BY n.name`).bind(user.id).all();
-  const encoded = encodeSubscription(rows.results.map((row) => rewriteNode(row.original_uri, row.protocol, row.hostname, row.name)));
+  if (!rows.results?.length) {
+    try {
+      await provisionUser(env, user, { prune: false });
+      rows = await env.DB.prepare(`SELECT n.name,n.protocol,n.original_uri,d.hostname FROM user_dns_records d JOIN nodes n ON n.id=d.node_id
+        WHERE d.user_id=? AND d.status='active' AND n.active=1 ORDER BY n.name`).bind(user.id).all();
+    } catch (err) {
+      console.error(JSON.stringify({ event: "subscription_self_heal_error", userId: user.id, error: err instanceof Error ? err.message : String(err) }));
+    }
+  }
+  const encoded = encodeSubscription((rows.results || []).map((row) => rewriteNode(row.original_uri, row.protocol, row.hostname, row.name)));
   return new Response(encoded, { headers: { "content-type": "text/plain; charset=utf-8", "subscription-userinfo": `expire=${Math.floor(Date.parse(user.expires_at) / 1e3)}`, "cache-control": "no-store" } });
 }
 __name(subscription, "subscription");
