@@ -557,12 +557,13 @@ function normalizePlanId(planId) {
 __name(normalizePlanId, "normalizePlanId");
 async function loadAppPlans(env, includeDisabled = false) {
   try {
-    const query = includeDisabled
-      ? "SELECT id,name,amount_cents,currency,days,node_limit,traffic_gb,sort_order,enabled FROM app_plans ORDER BY sort_order ASC,id ASC"
-      : "SELECT id,name,amount_cents,currency,days,node_limit,traffic_gb,sort_order,enabled FROM app_plans WHERE enabled=1 ORDER BY sort_order ASC,id ASC";
-    const rows = await env.DB.prepare(query).all();
-    if (rows?.results?.length) {
-      return rows.results.map((r) => ({
+    const totalCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM app_plans").first();
+    if (Number(totalCount?.total || 0) > 0) {
+      const query = includeDisabled
+        ? "SELECT id,name,amount_cents,currency,days,node_limit,traffic_gb,sort_order,enabled FROM app_plans ORDER BY sort_order ASC,id ASC"
+        : "SELECT id,name,amount_cents,currency,days,node_limit,traffic_gb,sort_order,enabled FROM app_plans WHERE enabled=1 ORDER BY sort_order ASC,id ASC";
+      const rows = await env.DB.prepare(query).all();
+      return (rows?.results || []).map((r) => ({
         id: r.id,
         name: r.name,
         amountCents: Number(r.amount_cents),
@@ -1286,7 +1287,7 @@ async function appUserPayload(request, env, userId, deviceId) {
   const token = String(device?.subscription_token || "");
   const expiresAt = user.expires_at;
   const configRevision = String(user.dns_revision ?? 0);
-  const plansList = await loadAppPlans(env);
+  const plansList = await loadAppPlans(env, true);
   const effectivePlanId = normalizePlanId(user.plan_id || paidOrder?.plan_id || "trial_1d");
   const paidPlan = paidOrder ? (plansList.find((plan) => plan.id === normalizePlanId(paidOrder.plan_id)) || plansList.find((plan) => plan.id === effectivePlanId)) : plansList.find((plan) => plan.id === effectivePlanId);
   const membership = effectiveMembership(user, paidOrder, paidPlan);
@@ -1597,7 +1598,7 @@ async function appApi(request, env, url) {
     if (session instanceof Response) return session;
     const order = await env.DB.prepare("SELECT id,order_no,user_id,plan_id,status,amount_cents,currency,metadata_json FROM app_orders WHERE order_no=? OR id=?").bind(orderMatch[1], Number(orderMatch[1]) || -1).first();
     if (!order || order.user_id !== session.user_id) return json({ error: "order_not_found" }, 404);
-    const plansList = await loadAppPlans(env);
+    const plansList = await loadAppPlans(env, true);
     const plan = plansList.find((item) => item.id === order.plan_id || item.id === normalizePlanId(order.plan_id)) || plansList[0];
     return json({ order: appOrderPayload(request, env, order, plan) });
   }
@@ -1629,8 +1630,8 @@ async function appPaymentPage(request, env, orderNo) {
   if (!order) return new Response("Order not found", { status: 404 });
   if (order.status === "paid") return new Response('<!doctype html><meta charset="utf-8"><p>Payment already completed. You can return to the app.</p>', { headers: { "content-type": "text/html; charset=utf-8" } });
   if (!appPaymentConfigured(env)) return new Response('<!doctype html><meta charset="utf-8"><p>Payment is not configured. Please set PAYMENT_API_BASE, PAYMENT_PID and PAYMENT_KEY.</p>', { status: 503, headers: { "content-type": "text/html; charset=utf-8" } });
-  const plansList = await loadAppPlans(env);
-    const plan = plansList.find((item) => item.id === order.plan_id || item.id === normalizePlanId(order.plan_id)) || plansList[0];
+  const plansList = await loadAppPlans(env, true);
+  const plan = plansList.find((item) => item.id === order.plan_id || item.id === normalizePlanId(order.plan_id)) || plansList[0];
   const fields = appPaymentFields(request, env, order, plan);
   const inputs = Object.entries(fields).map(([key, value]) => `<input type="hidden" name="${escapeHtml(key)}" value="${escapeHtml(value)}">`).join("");
   return new Response(`<!doctype html><html><head><meta charset="utf-8"><title>Pay</title></head><body><form id="pay" method="post" action="${escapeHtml(appPaymentBase(env))}/submit.php">${inputs}<button type="submit">Continue to pay</button></form><script>document.getElementById('pay').submit();<\/script></body></html>`, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" } });
@@ -1665,8 +1666,8 @@ async function appPaymentCallback(request, env) {
   if (!order) return new Response("fail", { status: 404 });
   const paid = String(values.trade_status || "").toUpperCase() === "TRADE_SUCCESS" || String(values.status || "").toLowerCase() === "paid";
   if (!paid || Number(values.money) !== Number((order.amount_cents / 100).toFixed(2))) return new Response("fail", { status: 400 });
-  const plansList = await loadAppPlans(env);
-    const plan = plansList.find((item) => item.id === order.plan_id || item.id === normalizePlanId(order.plan_id)) || plansList[0];
+  const plansList = await loadAppPlans(env, true);
+  const plan = plansList.find((item) => item.id === order.plan_id || item.id === normalizePlanId(order.plan_id)) || plansList[0];
   const providerOrderId = String(values.trade_no || "");
   if (order.status === "paid") {
     const existing = await env.DB.prepare("SELECT order_id,applied_at FROM app_order_grants WHERE order_id=?").bind(order.id).first();
@@ -1872,10 +1873,10 @@ async function adminUpdatePlan(request, env, rawPlanId) {
   const existing = plans.find((p) => p.id === planId);
   const name = input.name == null ? (existing ? existing.name : planId) : String(input.name).trim().slice(0, 40);
   if (!name) return json({ error: "\u5957\u9910\u540D\u79F0\u4E0D\u80FD\u4E3A\u7A7A" }, 400);
-  const amountCents = input.amountCents == null ? (existing ? existing.amountCents : 0) : Math.max(0, Math.round(Number(input.amountCents)));
-  const days = input.days == null ? (existing ? existing.days : 30) : Math.max(1, Math.min(3650, Math.round(Number(input.days))));
-  const nodeLimit = input.nodeLimit == null ? (existing ? existing.nodeLimit : 10) : Math.max(1, Math.min(20, Math.round(Number(input.nodeLimit))));
-  const trafficGb = input.trafficGb == null ? (existing ? existing.trafficGb : 100) : Math.max(1, Math.round(Number(input.trafficGb)));
+  const amountCents = input.amountCents == null ? (existing ? existing.amountCents : 0) : (Number.isFinite(Number(input.amountCents)) ? Math.max(0, Math.round(Number(input.amountCents))) : (existing ? existing.amountCents : 0));
+  const days = input.days == null ? (existing ? existing.days : 30) : (Number.isFinite(Number(input.days)) ? Math.max(1, Math.min(3650, Math.round(Number(input.days)))) : (existing ? existing.days : 30));
+  const nodeLimit = input.nodeLimit == null ? (existing ? existing.nodeLimit : 10) : (Number.isFinite(Number(input.nodeLimit)) ? Math.max(1, Math.min(20, Math.round(Number(input.nodeLimit)))) : (existing ? existing.nodeLimit : 10));
+  const trafficGb = input.trafficGb == null ? (existing ? existing.trafficGb : 100) : (Number.isFinite(Number(input.trafficGb)) ? Math.max(1, Math.round(Number(input.trafficGb))) : (existing ? existing.trafficGb : 100));
   const enabled = input.enabled == null ? (existing ? (existing.enabled ? 1 : 0) : 1) : (input.enabled ? 1 : 0);
   const sortOrder = existing ? (existing.sortOrder || 0) : (plans.length + 1);
 

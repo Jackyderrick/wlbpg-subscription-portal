@@ -18,13 +18,13 @@
     "APP_PLANS_JSON": "[{\"id\":\"monthly\",\"name\":\"Monthly\",\"amountCents\":999,\"currency\":\"USD\",\"days\":30,\"nodeLimit\":8,\"trafficGb\":100},{\"id\":\"quarterly\",\"name\":\"Quarterly\",\"amountCents\":2499,\"currency\":\"USD\",\"days\":90,\"nodeLimit\":12,\"trafficGb\":300}]",
     "APP_UPDATE_WINDOWS_VERSION": "4.3.0",
     "APP_UPDATE_WINDOWS_NOTES": "【新版本体验】外贸加速器 v4.3.0 正式发布！新增左侧独立设置中心，优化分流策略与节点稳定性。",
-    "APP_UPDATE_VERSION_CODE": "10008",
+    "APP_UPDATE_VERSION_CODE": "10009",
     "APP_UPDATE_VERSION_NAME": "1.15.0-alpha.13",
     "APP_UPDATE_APK_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-latest.apk",
     "APP_UPDATE_RELEASE_URL": "https://pub-a875cd2b61b44fd0b04710f9bb172bdb.r2.dev/android/waimao-accelerator-1.15.0-alpha.13.apk",
-    "APP_UPDATE_MESSAGE": "1. 新增启动守护机制：点击启动自动预检并同步账号与节点，无需手动进用户中心同步\n2. 修复控制台与分流直连保障，同步与更新永不超时\n3. 全协议节点支持（Hysteria2、AnyTLS、SS-2022 等）与 SNI 智能保留\n4. 用户中心新增“官方网站”入口",
+    "APP_UPDATE_MESSAGE": "1. 修复启动守护与并发防重互斥，消灭冷启动与多开竞态\n2. 补全 R2 下载与 MotionPay 支付直连白名单，杜绝任何分流死锁\n3. 修复停售/下架套餐在途订单与用户状态识别\n4. 全协议节点支持（Hysteria2、AnyTLS、SS-2022 等）",
     "APP_UPDATE_FORCE": "false",
-    "APP_UPDATE_SHA256": "7A137255D8E175FC5C4C9BA1A6D95B3709316C1D4C9E03A71B09BBCD46CE1550"
+    "APP_UPDATE_SHA256": "8B930FBD6AFB3EDEAB25FA6148259499AFCFA61B63C88BDA23DB311433D353FB"
   },
   "d1_databases": [
     {
