@@ -12,6 +12,10 @@
     "DNS_SUFFIX": "ddda.dpdns.org",
     "CF_ZONE_ID": "ed0b451b965e84addf0757d3bf2086ee",
     "DNS_POOLS": "[{\"suffix\":\"ddda.dpdns.org\",\"zoneId\":\"ed0b451b965e84addf0757d3bf2086ee\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.ggff.net\",\"zoneId\":\"76db1207ea8d1132e3f40702c6d9d36e\",\"maxRecords\":190},{\"suffix\":\"subwlbpg.kdns.fr\",\"zoneId\":\"16d1fcec8ef216b42c42532ab3425110\",\"maxRecords\":190},{\"suffix\":\"wlbpg.kdns.fr\",\"zoneId\":\"929e19c968647c9b3d1fb4f331c541a7\",\"maxRecords\":190}]",
+    "DNS_SUBREQUEST_BUDGET": "250",
+    "DNS_CONCURRENCY": "4",
+    "BOOTSTRAP_PER_IP_MINUTE": "60",
+    "BOOTSTRAP_NEW_DEVICE_PER_IP_HOUR": "30",
     "APP_UPDATE_WINDOWS_VERSION": "4.3.0",
     "APP_UPDATE_WINDOWS_NOTES": "【新版本体验】外贸加速器 v4.3.0 正式发布！新增左侧独立设置中心，优化分流策略与节点稳定性。",
     "APP_UPDATE_VERSION_CODE": "10009",
@@ -37,6 +41,6 @@
     }
   ],
   "triggers": {
-    "crons": ["*/5 * * * *", "7 * * * *"]
+    "crons": ["*/5 * * * *", "*/15 * * * *", "7 * * * *"]
   }
 }

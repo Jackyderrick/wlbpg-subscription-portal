@@ -936,13 +936,52 @@ function localizedNodeName(name, upstreamId) {
 __name(localizedNodeName, "localizedNodeName");
 __name2(localizedNodeName, "localizedNodeName");
 __name22(localizedNodeName, "localizedNodeName");
-async function cfDns(env, zoneId, method, path = "", payload) {
-  env.__subrequests = (env.__subrequests || 0) + 1;
+function createBudget(env, maxOverride) {
+  const limit = Math.max(20, Math.min(800, Number(maxOverride || env?.DNS_SUBREQUEST_BUDGET || 250)));
+  return { count: 0, limit, rateLimited: false };
+}
+__name(createBudget, "createBudget");
+__name2(createBudget, "createBudget");
+__name22(createBudget, "createBudget");
+
+async function runWithConcurrency(items, concurrency, fn) {
+  const results = [];
+  const limit = Math.max(1, Math.min(10, Number(concurrency || 4)));
+  let index = 0;
+  const workers = Array.from({ length: Math.min(items.length, limit) }, async () => {
+    while (index < items.length) {
+      const current = index++;
+      results[current] = await fn(items[current], current);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+__name(runWithConcurrency, "runWithConcurrency");
+__name2(runWithConcurrency, "runWithConcurrency");
+__name22(runWithConcurrency, "runWithConcurrency");
+
+async function cfDns(env, zoneId, method, path = "", payload, budget = null) {
+  if (budget) {
+    if (budget.count >= budget.limit || budget.rateLimited) {
+      throw new Error("DNS subrequest budget exceeded or rate limited");
+    }
+    budget.count++;
+  } else {
+    env.__subrequests = (env.__subrequests || 0) + 1;
+  }
   const response = await fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records${path}`, {
     method,
     headers: { authorization: `Bearer ${env.CF_API_TOKEN}`, "content-type": "application/json" },
     body: payload === void 0 ? void 0 : JSON.stringify(payload)
   });
+  if (response.status === 429) {
+    if (budget) budget.rateLimited = true;
+    const err = new Error("Cloudflare DNS API 429 Rate Limit");
+    err.cfErrors = [{ code: 429, message: "Rate limit exceeded" }];
+    err.httpStatus = 429;
+    throw err;
+  }
   const result = await response.json();
   if (!response.ok || result.success !== true) {
     const err = new Error(`Cloudflare DNS \u8BF7\u6C42\u5931\u8D25\uFF1A${JSON.stringify(result.errors ?? response.status)}`);
@@ -955,18 +994,18 @@ async function cfDns(env, zoneId, method, path = "", payload) {
 __name(cfDns, "cfDns");
 __name2(cfDns, "cfDns");
 __name22(cfDns, "cfDns");
-async function createDns(env, pool, hostname, server) {
+async function createDns(env, pool, hostname, server, budget = null) {
   const recordBody = { type: dnsType(server), name: hostname, content: server, ttl: 60, proxied: false, comment: "dns-sub-share managed" };
   try {
-    const result = await cfDns(env, pool.zoneId, "POST", "", recordBody);
+    const result = await cfDns(env, pool.zoneId, "POST", "", recordBody, budget);
     return String(result.result?.id ?? "");
   } catch (err) {
     const codes = (err.cfErrors || []).map((e) => Number(e.code));
     if (codes.includes(81053) || codes.includes(81057) || codes.includes(81058)) {
-      const list = await cfDns(env, pool.zoneId, "GET", `?name=${encodeURIComponent(hostname)}`);
+      const list = await cfDns(env, pool.zoneId, "GET", `?name=${encodeURIComponent(hostname)}`, void 0, budget);
       const existing = list.result?.[0];
       if (existing?.id) {
-        await cfDns(env, pool.zoneId, "PATCH", `/${existing.id}`, recordBody);
+        await cfDns(env, pool.zoneId, "PATCH", `/${existing.id}`, recordBody, budget);
         return String(existing.id);
       }
     }
@@ -976,10 +1015,10 @@ async function createDns(env, pool, hostname, server) {
 __name(createDns, "createDns");
 __name2(createDns, "createDns");
 __name22(createDns, "createDns");
-async function deleteDns(env, zoneId, recordId) {
+async function deleteDns(env, zoneId, recordId, budget = null) {
   if (!recordId) return;
   try {
-    await cfDns(env, zoneId, "DELETE", `/${recordId}`);
+    await cfDns(env, zoneId, "DELETE", `/${recordId}`, void 0, budget);
   } catch (err) {
     const codes = (err.cfErrors || []).map((e) => Number(e.code));
     if (err.httpStatus === 404 || codes.includes(81044)) return;
@@ -989,9 +1028,8 @@ async function deleteDns(env, zoneId, recordId) {
 __name(deleteDns, "deleteDns");
 __name2(deleteDns, "deleteDns");
 __name22(deleteDns, "deleteDns");
-async function pickDnsPool(env, excludedZoneIds = new Set()) {
-  const pools = dnsPools(env).filter((p) => !excludedZoneIds.has(p.zoneId));
-  if (!pools.length) throw new Error("\u6240\u6709\u53EF\u7528\u8282\u70B9\u57DF\u540D\u6C60\u5747\u5DF2\u6392\u9664\u6216\u5BB9\u91CF\u4E0A\u9650");
+
+async function loadDnsPoolStats(env) {
   const usage = await env.DB.prepare("SELECT COALESCE(zone_id, ?) zone_id, status, COUNT(*) total FROM user_dns_records GROUP BY COALESCE(zone_id, ?), status").bind(env.CF_ZONE_ID, env.CF_ZONE_ID).all();
   const activeCounts = new Map();
   const errorCounts = new Map();
@@ -999,17 +1037,56 @@ async function pickDnsPool(env, excludedZoneIds = new Set()) {
     if (row.status === "active") activeCounts.set(row.zone_id, Number(row.total));
     else if (row.status === "error") errorCounts.set(row.zone_id, Number(row.total));
   }
-  const available = pools.filter((pool) => (activeCounts.get(pool.zoneId) || 0) < pool.maxRecords);
-  if (!available.length) throw new Error("\u6240\u6709\u8282\u70B9\u57DF\u540D\u6C60\u5747\u5DF2\u8FBE\u5230\u5BB9\u91CF\u4E0A\u9650");
+  return { activeCounts, errorCounts };
+}
+__name(loadDnsPoolStats, "loadDnsPoolStats");
+__name2(loadDnsPoolStats, "loadDnsPoolStats");
+__name22(loadDnsPoolStats, "loadDnsPoolStats");
+
+function selectDnsPoolFromStats(pools, stats, excludedZoneIds = new Set()) {
+  const available = pools.filter((p) => !excludedZoneIds.has(p.zoneId) && (stats.activeCounts.get(p.zoneId) || 0) < p.maxRecords);
+  if (!available.length) throw new Error("\u6240\u6709\u53EF\u7528\u8282\u70B9\u57DF\u540D\u6C60\u5747\u5DF2\u6392\u9664\u6216\u5BB9\u91CF\u4E0A\u9650");
   return available.sort((a, b) => {
-    const loadA = ((activeCounts.get(a.zoneId) || 0) + (errorCounts.get(a.zoneId) || 0) * 2) / a.maxRecords;
-    const loadB = ((activeCounts.get(b.zoneId) || 0) + (errorCounts.get(b.zoneId) || 0) * 2) / b.maxRecords;
+    const loadA = ((stats.activeCounts.get(a.zoneId) || 0) + (stats.errorCounts.get(a.zoneId) || 0) * 2) / a.maxRecords;
+    const loadB = ((stats.activeCounts.get(b.zoneId) || 0) + (stats.errorCounts.get(b.zoneId) || 0) * 2) / b.maxRecords;
     return loadA - loadB;
   })[0];
+}
+__name(selectDnsPoolFromStats, "selectDnsPoolFromStats");
+__name2(selectDnsPoolFromStats, "selectDnsPoolFromStats");
+__name22(selectDnsPoolFromStats, "selectDnsPoolFromStats");
+
+async function pickDnsPool(env, excludedZoneIds = new Set()) {
+  const pools = dnsPools(env);
+  const stats = await loadDnsPoolStats(env);
+  return selectDnsPoolFromStats(pools, stats, excludedZoneIds);
 }
 __name(pickDnsPool, "pickDnsPool");
 __name2(pickDnsPool, "pickDnsPool");
 __name22(pickDnsPool, "pickDnsPool");
+
+async function checkRateLimit(env, scope, key, limit, windowSec) {
+  try {
+    const nowSec = Math.floor(Date.now() / 1000);
+    const windowStart = Math.floor(nowSec / windowSec) * windowSec;
+    await env.DB.prepare(`
+      INSERT INTO app_rate_limits(rate_key, scope, window_start, hits)
+      VALUES(?, ?, ?, 1)
+      ON CONFLICT(rate_key, scope, window_start) DO UPDATE SET hits = hits + 1
+    `).bind(key, scope, windowStart).run();
+    const row = await env.DB.prepare(`
+      SELECT hits FROM app_rate_limits WHERE rate_key=? AND scope=? AND window_start=?
+    `).bind(key, scope, windowStart).first();
+    const hits = Number(row?.hits || 1);
+    return { ok: hits <= limit, hits, limit, remaining: Math.max(0, limit - hits), resetSec: (windowStart + windowSec) - nowSec };
+  } catch (err) {
+    console.error(JSON.stringify({ event: "rate_limit_error", scope, key, error: err instanceof Error ? err.message : String(err) }));
+    return { ok: true, hits: 0, limit, remaining: limit, resetSec: windowSec };
+  }
+}
+__name(checkRateLimit, "checkRateLimit");
+__name2(checkRateLimit, "checkRateLimit");
+__name22(checkRateLimit, "checkRateLimit");
 async function syncUpstream(env, upstreamId) {
   const upstream = await env.DB.prepare("SELECT subscription_url FROM upstreams WHERE id=? AND enabled=1").bind(upstreamId).first();
   if (!upstream) throw new Error("\u4E0A\u6E38\u4E0D\u5B58\u5728\u6216\u5DF2\u505C\u7528");
@@ -1116,7 +1193,9 @@ async function syncAllUpstreams(env) {
 __name(syncAllUpstreams, "syncAllUpstreams");
 __name2(syncAllUpstreams, "syncAllUpstreams");
 __name22(syncAllUpstreams, "syncAllUpstreams");
-async function provisionUser(env, user, { prune = true } = {}) {
+async function provisionUser(env, user, { prune = true, budget = null } = {}) {
+  const effectiveBudget = budget || createBudget(env);
+  const concurrency = Math.max(1, Math.min(5, Number(env?.DNS_CONCURRENCY || 4)));
   const limit = Math.max(1, Math.min(20, user.node_limit || 10));
   let planId = user.plan_id;
   if (!planId) {
@@ -1147,37 +1226,37 @@ async function provisionUser(env, user, { prune = true } = {}) {
     await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE user_id=? AND status='error' AND (cloudflare_record_id IS NULL OR cloudflare_record_id='')").bind(user.id).run();
   } catch {}
   const errorRows = await env.DB.prepare("SELECT id,node_id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='error'").bind(user.id).all();
-  for (const erow of errorRows.results || []) {
-    if ((env.__subrequests || 0) >= 38) break;
+  await runWithConcurrency(errorRows.results || [], concurrency, async (erow) => {
+    if (effectiveBudget.count >= effectiveBudget.limit || effectiveBudget.rateLimited) return;
     try {
       if (erow.cloudflare_record_id) {
-        await deleteDns(env, erow.zone_id || env.CF_ZONE_ID, erow.cloudflare_record_id);
+        await deleteDns(env, erow.zone_id || env.CF_ZONE_ID, erow.cloudflare_record_id, effectiveBudget);
       }
       await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE id=?").bind(erow.id).run();
     } catch {}
-  }
+  });
+
   const activeRows = await env.DB.prepare("SELECT id,node_id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='active' ORDER BY created_at,id").bind(user.id).all();
   let active = activeRows.results || [];
   let disallowedRemoved = 0, disallowedFailed = 0;
   if (prune && rawAllowedIds.length > 0) {
-    const kept = [];
-    for (const row of active) {
-      if (!allowedIds.includes(Number(row.node_id))) {
-        if ((env.__subrequests || 0) >= 38) {
+    const disallowed = active.filter((row) => !allowedIds.includes(Number(row.node_id)));
+    const kept = active.filter((row) => allowedIds.includes(Number(row.node_id)));
+    if (disallowed.length > 0) {
+      await runWithConcurrency(disallowed, concurrency, async (row) => {
+        if (effectiveBudget.count >= effectiveBudget.limit || effectiveBudget.rateLimited) {
           kept.push(row);
-          continue;
+          return;
         }
         try {
-          await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
+          await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "", effectiveBudget);
           await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE id=?").bind(row.id).run();
           disallowedRemoved++;
         } catch (error) {
           disallowedFailed++;
           await env.DB.prepare("UPDATE user_dns_records SET status='error',last_error=? WHERE id=?").bind(error instanceof Error ? error.message : String(error), row.id).run();
         }
-      } else {
-        kept.push(row);
-      }
+      });
     }
     active = kept;
   }
@@ -1186,16 +1265,17 @@ async function provisionUser(env, user, { prune = true } = {}) {
     const latest = await env.DB.prepare("SELECT id,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status='active' ORDER BY created_at,id").bind(user.id).all();
     const extras = latest.results.slice(limit);
     let removed2 = 0, failed2 = 0;
-    for (const row of extras) {
+    await runWithConcurrency(extras, concurrency, async (row) => {
+      if (effectiveBudget.count >= effectiveBudget.limit || effectiveBudget.rateLimited) return;
       try {
-        await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
+        await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "", effectiveBudget);
         await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE id=?").bind(row.id).run();
         removed2++;
       } catch (error) {
         failed2++;
         await env.DB.prepare("UPDATE user_dns_records SET status='error',last_error=? WHERE id=?").bind(error instanceof Error ? error.message : String(error), row.id).run();
       }
-    }
+    });
     return { removed: removed2, failed: failed2 };
   }
   __name(pruneExtras, "pruneExtras");
@@ -1212,10 +1292,12 @@ async function provisionUser(env, user, { prune = true } = {}) {
   let created = 0, failed = 0;
   const allPools = dnsPools(env);
   const failedZoneIds = new Set();
-  for (const node of nodes.results) {
-    if ((env.__subrequests || 0) >= 38) break;
+  const poolStats = await loadDnsPoolStats(env);
+
+  await runWithConcurrency(nodes.results || [], concurrency, async (node) => {
+    if (effectiveBudget.count >= effectiveBudget.limit || effectiveBudget.rateLimited) return;
     const existing = await env.DB.prepare("SELECT id,status FROM user_dns_records WHERE user_id=? AND node_id=?").bind(user.id, node.id).first();
-    if (existing?.status === "active") continue;
+    if (existing?.status === "active") return;
     const label = `u${user.id}-r${user.dns_revision}-${node.fingerprint.slice(0, 10)}-${node.id}`;
     let recordCreated = false;
     let lastErrorMsg = "";
@@ -1223,27 +1305,29 @@ async function provisionUser(env, user, { prune = true } = {}) {
     let lastHostname = "";
 
     while (failedZoneIds.size < allPools.length) {
-      if ((env.__subrequests || 0) >= 38) break;
+      if (effectiveBudget.count >= effectiveBudget.limit || effectiveBudget.rateLimited) break;
       let pool;
       try {
-        pool = await pickDnsPool(env, failedZoneIds);
+        pool = selectDnsPoolFromStats(allPools, poolStats, failedZoneIds);
       } catch {
         break;
       }
       lastZoneId = pool.zoneId;
       lastHostname = `${label}.${pool.suffix}`;
       try {
-        const recordId = await createDns(env, pool, lastHostname, node.original_server);
+        const recordId = await createDns(env, pool, lastHostname, node.original_server, effectiveBudget);
         await env.DB.prepare(`INSERT INTO user_dns_records(user_id,node_id,hostname,record_type,record_content,cloudflare_record_id,zone_id,status,last_error)
           VALUES(?,?,?,?,?,?,?, 'active',NULL)
           ON CONFLICT(user_id,node_id) DO UPDATE SET hostname=excluded.hostname,record_type=excluded.record_type,record_content=excluded.record_content,cloudflare_record_id=excluded.cloudflare_record_id,zone_id=excluded.zone_id,status='active',last_error=NULL`).bind(user.id, node.id, lastHostname, dnsType(node.original_server), node.original_server, recordId, pool.zoneId).run();
+        poolStats.activeCounts.set(pool.zoneId, (poolStats.activeCounts.get(pool.zoneId) || 0) + 1);
         created++;
         recordCreated = true;
         break;
       } catch (error) {
         failedZoneIds.add(pool.zoneId);
+        poolStats.errorCounts.set(pool.zoneId, (poolStats.errorCounts.get(pool.zoneId) || 0) + 1);
         lastErrorMsg = error instanceof Error ? error.message : String(error);
-        if (lastErrorMsg.includes("subrequest")) break;
+        if (effectiveBudget.rateLimited || lastErrorMsg.includes("budget exceeded") || lastErrorMsg.includes("subrequest")) break;
       }
     }
 
@@ -1252,31 +1336,80 @@ async function provisionUser(env, user, { prune = true } = {}) {
       await env.DB.prepare(`INSERT INTO user_dns_records(user_id,node_id,hostname,record_type,record_content,zone_id,status,last_error)
         VALUES(?,?,?,?,?,?,'error',?) ON CONFLICT(user_id,node_id) DO UPDATE SET status='error',last_error=excluded.last_error,zone_id=excluded.zone_id`).bind(user.id, node.id, lastHostname || `${label}.failed`, dnsType(node.original_server), node.original_server, lastZoneId || env.CF_ZONE_ID, lastErrorMsg || "All pools failed").run();
     }
-  }
+  });
+
   const pruned = await pruneExtras();
   return { created, removed: disallowedRemoved + pruned.removed, failed: failed + disallowedFailed + pruned.failed };
 }
 __name(provisionUser, "provisionUser");
 __name2(provisionUser, "provisionUser");
 __name22(provisionUser, "provisionUser");
-async function deprovisionUser(env, userId) {
+async function deprovisionUser(env, userId, budget = null) {
+  const effectiveBudget = budget || createBudget(env);
+  const concurrency = Math.max(1, Math.min(5, Number(env?.DNS_CONCURRENCY || 4)));
   const rows = await env.DB.prepare("SELECT id,hostname,cloudflare_record_id,zone_id FROM user_dns_records WHERE user_id=? AND status IN ('active','error')").bind(userId).all();
   let removed = 0, failed = 0;
-  for (const row of rows.results) {
+  await runWithConcurrency(rows.results || [], concurrency, async (row) => {
+    if (effectiveBudget.count >= effectiveBudget.limit || effectiveBudget.rateLimited) return;
     try {
-      await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
+      await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "", effectiveBudget);
       await env.DB.prepare("UPDATE user_dns_records SET status='deleted',cloudflare_record_id=NULL,last_error=NULL WHERE id=?").bind(row.id).run();
       removed++;
     } catch (error) {
       failed++;
       await env.DB.prepare("UPDATE user_dns_records SET status='error',last_error=? WHERE id=?").bind(error instanceof Error ? error.message : String(error), row.id).run();
     }
-  }
+  });
   return { removed, failed };
 }
 __name(deprovisionUser, "deprovisionUser");
 __name2(deprovisionUser, "deprovisionUser");
 __name22(deprovisionUser, "deprovisionUser");
+
+async function healAndMaintain(env) {
+  const budget = createBudget(env, 200);
+  try {
+    const twoDaysAgoSec = Math.floor(Date.now() / 1000) - 172800;
+    await env.DB.prepare("DELETE FROM app_rate_limits WHERE window_start < ?").bind(twoDaysAgoSec).run();
+    await env.DB.prepare("DELETE FROM app_email_codes WHERE created_at < datetime('now', '-7 day')").run();
+    await env.DB.prepare("DELETE FROM app_sessions WHERE expires_at < datetime('now', '-30 day')").run();
+  } catch (err) {
+    console.error(JSON.stringify({ event: "heal_cleanup_error", error: err instanceof Error ? err.message : String(err) }));
+  }
+
+  try {
+    const candidates = await env.DB.prepare(`
+      SELECT DISTINCT u.id, u.name, u.upstream_id, u.expires_at, u.status, u.node_limit, u.plan_id, u.dns_revision
+      FROM users u
+      LEFT JOIN user_dns_records d ON d.user_id = u.id AND d.status = 'active'
+      WHERE u.status = 'active' AND u.expires_at > datetime('now')
+      GROUP BY u.id
+      HAVING COUNT(d.id) < u.node_limit OR EXISTS (
+        SELECT 1 FROM user_dns_records e WHERE e.user_id = u.id AND e.status = 'error'
+      )
+      LIMIT 10
+    `).all();
+
+    let healed = 0;
+    for (const u of candidates.results || []) {
+      if (budget.count >= budget.limit || budget.rateLimited) break;
+      try {
+        await provisionUser(env, u, { prune: true, budget });
+        healed++;
+      } catch (err) {
+        console.error(JSON.stringify({ event: "heal_user_error", userId: u.id, error: err instanceof Error ? err.message : String(err) }));
+      }
+    }
+    console.log(JSON.stringify({ event: "heal_complete", healed, budgetUsed: budget.count }));
+    return { healed, budgetUsed: budget.count };
+  } catch (err) {
+    console.error(JSON.stringify({ event: "heal_maintain_error", error: err instanceof Error ? err.message : String(err) }));
+    return { healed: 0, budgetUsed: budget.count, error: String(err) };
+  }
+}
+__name(healAndMaintain, "healAndMaintain");
+__name2(healAndMaintain, "healAndMaintain");
+__name22(healAndMaintain, "healAndMaintain");
 async function expireUsers(env) {
   const users = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE status='active' AND expires_at<=datetime('now')").all();
   for (const user of users.results) {
@@ -1483,6 +1616,9 @@ async function appApi(request, env, url) {
     return json({ plans: await loadAppPlans(env) });
   }
   if (request.method === "POST" && url.pathname === "/api/app/email/recover/request-code") {
+    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    const ipCheck = await checkRateLimit(env, "email_code_ip", clientIp, 10, 60);
+    if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many email code requests" }, 429);
     const input = await body(request);
     const clean = cleanProfileInput({ email: input.email });
     if (clean.error || !clean.email || !clean.normalizedEmail) return json({ error: clean.error || "email_required" }, 400);
@@ -1496,6 +1632,9 @@ async function appApi(request, env, url) {
     return json({ ok: true, purpose: "recover", email: clean.email, expiresAt });
   }
   if (request.method === "POST" && url.pathname === "/api/app/email/recover/verify") {
+    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    const attemptCheck = await checkRateLimit(env, "email_verify_attempt_ip", clientIp, 20, 300);
+    if (!attemptCheck.ok) return json({ error: "rate_limited", message: "Too many verification attempts" }, 429);
     const input = await body(request);
     const clean = cleanProfileInput({ email: input.email });
     const deviceUUID = String(input.device_uuid || "").trim().toLowerCase();
@@ -1505,7 +1644,10 @@ async function appApi(request, env, url) {
     const row = await env.DB.prepare(`SELECT id,user_id FROM app_email_codes
       WHERE normalized_email=? AND purpose='recover' AND code_hash=? AND consumed_at IS NULL AND expires_at>?
       ORDER BY id DESC LIMIT 1`).bind(clean.normalizedEmail, codeHash, (/* @__PURE__ */ new Date()).toISOString()).first();
-    if (!row) return json({ error: "invalid_or_expired_code" }, 400);
+    if (!row) {
+      await checkRateLimit(env, "email_verify_fail_ip", clientIp, 10, 300);
+      return json({ error: "invalid_or_expired_code" }, 400);
+    }
     const deviceHash = await hash(deviceUUID);
     let device = await env.DB.prepare("SELECT id,user_id,subscription_token FROM app_devices WHERE device_uuid_hash=?").bind(deviceHash).first();
     const tokenDevice = await env.DB.prepare("SELECT subscription_token,platform,app_version,model FROM app_devices WHERE user_id=? ORDER BY id DESC LIMIT 1").bind(row.user_id).first();
@@ -1524,6 +1666,10 @@ async function appApi(request, env, url) {
     return json({ ...await appUserPayload(request, env, row.user_id, device.id), access_token: accessToken, accessTokenExpiresAt: sessionExpiresAt });
   }
   if (request.method === "POST" && url.pathname === "/api/app/bootstrap") {
+    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    const ipLimit = Number(env.BOOTSTRAP_PER_IP_MINUTE || 60);
+    const ipCheck = await checkRateLimit(env, "bootstrap_ip", clientIp, ipLimit, 60);
+    if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many bootstrap requests" }, 429);
     const input = await body(request);
     const deviceUUID = String(input.device_uuid || "").trim().toLowerCase();
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(deviceUUID)) return json({ error: "invalid_device_uuid" }, 400);
@@ -1533,6 +1679,9 @@ async function appApi(request, env, url) {
     const guestPrefix = isDesktop ? "Web Guest" : "App Guest";
     let device = await env.DB.prepare("SELECT id,user_id,subscription_token FROM app_devices WHERE device_uuid_hash=?").bind(deviceHash).first();
     if (!device) {
+      const newDevLimit = Number(env.BOOTSTRAP_NEW_DEVICE_PER_IP_HOUR || 30);
+      const newDevCheck = await checkRateLimit(env, "bootstrap_new_device_ip", clientIp, newDevLimit, 3600);
+      if (!newDevCheck.ok) return json({ error: "rate_limited", message: "New device creation limit reached" }, 429);
       const upstream = await env.DB.prepare("SELECT id FROM upstreams WHERE enabled=1 ORDER BY id LIMIT 1").first();
       if (!upstream) return json({ error: "no_upstream_available" }, 503);
       const subscriptionToken = randomToken();
@@ -1565,6 +1714,9 @@ async function appApi(request, env, url) {
   if (request.method === "POST" && url.pathname === "/api/app/email/request-code") {
     const session = await requireAppSession(request, env);
     if (session instanceof Response) return session;
+    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    const ipCheck = await checkRateLimit(env, "email_code_ip", clientIp, 10, 60);
+    if (!ipCheck.ok) return json({ error: "rate_limited", message: "Too many email code requests" }, 429);
     const input = await body(request);
     const clean = cleanProfileInput({ email: input.email });
     if (clean.error || !clean.email || !clean.normalizedEmail) return json({ error: clean.error || "email_required" }, 400);
@@ -1579,6 +1731,9 @@ async function appApi(request, env, url) {
   if (request.method === "POST" && url.pathname === "/api/app/email/verify-bind") {
     const session = await requireAppSession(request, env);
     if (session instanceof Response) return session;
+    const clientIp = request.headers.get("cf-connecting-ip") || "unknown";
+    const attemptCheck = await checkRateLimit(env, "email_verify_attempt_ip", clientIp, 20, 300);
+    if (!attemptCheck.ok) return json({ error: "rate_limited", message: "Too many verification attempts" }, 429);
     const input = await body(request);
     const clean = cleanProfileInput({ email: input.email, nickname: input.nickname });
     if (clean.error || !clean.email || !clean.normalizedEmail) return json({ error: clean.error || "email_required" }, 400);
@@ -1586,7 +1741,10 @@ async function appApi(request, env, url) {
     const row = await env.DB.prepare(`SELECT id FROM app_email_codes
       WHERE user_id=? AND normalized_email=? AND purpose='bind' AND code_hash=? AND consumed_at IS NULL AND expires_at>?
       ORDER BY id DESC LIMIT 1`).bind(session.user_id, clean.normalizedEmail, codeHash, (/* @__PURE__ */ new Date()).toISOString()).first();
-    if (!row) return json({ error: "invalid_or_expired_code" }, 400);
+    if (!row) {
+      await checkRateLimit(env, "email_verify_fail_ip", clientIp, 10, 300);
+      return json({ error: "invalid_or_expired_code" }, 400);
+    }
     const profile = await upsertUserProfile(env, session.user_id, { email: clean.email, nickname: clean.nickname });
     if (profile.error) return json({ error: profile.error }, profile.error === "email_already_bound" ? 409 : 400);
     await env.DB.prepare("UPDATE app_email_codes SET consumed_at=CURRENT_TIMESTAMP WHERE id=?").bind(row.id).run();
@@ -1696,7 +1854,7 @@ function escapeHtml(value) {
 __name(escapeHtml, "escapeHtml");
 __name2(escapeHtml, "escapeHtml");
 __name22(escapeHtml, "escapeHtml");
-async function appPaymentCallback(request, env) {
+async function appPaymentCallback(request, env, ctx = null) {
   const values = request.method === "POST" ? Array.from((await request.formData()).entries()).reduce((acc, [key, value]) => {
     acc[key] = String(value);
     return acc;
@@ -1717,12 +1875,16 @@ async function appPaymentCallback(request, env) {
       return new Response("success", { headers: { "content-type": "text/plain; charset=utf-8" } });
     }
     if (!existing) {
-      try {
-        const legacy = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(order.user_id).first();
-        if (legacy) await provisionUser(env, legacy);
-      } catch (error) {
-        console.log(JSON.stringify({ event: "payment_provision_error", order: order.order_no, error: error instanceof Error ? error.message : String(error) }));
-      }
+      const runLegacy = async () => {
+        try {
+          const legacy = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(order.user_id).first();
+          if (legacy) await provisionUser(env, legacy);
+        } catch (error) {
+          console.log(JSON.stringify({ event: "payment_provision_error", order: order.order_no, error: error instanceof Error ? error.message : String(error) }));
+        }
+      };
+      if (ctx?.waitUntil) ctx.waitUntil(runLegacy());
+      else await runLegacy();
       return new Response("success", { headers: { "content-type": "text/plain; charset=utf-8" } });
     }
   }
@@ -1743,12 +1905,16 @@ async function appPaymentCallback(request, env) {
     ]);
     await env.DB.prepare("UPDATE app_order_grants SET expires_at=(SELECT expires_at FROM users WHERE id=?) WHERE order_id=?").bind(order.user_id, order.id).run();
   }
-  try {
-    const updated = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(order.user_id).first();
-    if (updated) await provisionUser(env, updated, { prune: true });
-  } catch (error) {
-    console.log(JSON.stringify({ event: "payment_provision_error", order: order.order_no, error: error instanceof Error ? error.message : String(error) }));
-  }
+  const runProvision = async () => {
+    try {
+      const updated = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,dns_revision FROM users WHERE id=?").bind(order.user_id).first();
+      if (updated) await provisionUser(env, updated, { prune: true });
+    } catch (error) {
+      console.log(JSON.stringify({ event: "payment_provision_error", order: order.order_no, error: error instanceof Error ? error.message : String(error) }));
+    }
+  };
+  if (ctx?.waitUntil) ctx.waitUntil(runProvision());
+  else await runProvision();
   return new Response("success", { headers: { "content-type": "text/plain; charset=utf-8" } });
 }
 __name(appPaymentCallback, "appPaymentCallback");
@@ -1825,9 +1991,13 @@ async function adminUpdateUser(request, env, userId) {
   const existing = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,COALESCE(device_limit,2) device_limit,COALESCE(plan_id,'trial_1d') plan_id,dns_revision FROM users WHERE id=?").bind(userId).first();
   if (!existing) return json({ error: "\u7528\u6237\u4E0D\u5B58\u5728" }, 404);
   const name = input.name == null ? existing.name : String(input.name).trim().slice(0, 80);
-  const expiresAt = input.expiresAt == null ? existing.expires_at : new Date(input.expiresAt).toISOString();
   if (!name) return json({ error: "\u7528\u6237\u540D\u4E0D\u80FD\u4E3A\u7A7A" }, 400);
-  if (Number.isNaN(Date.parse(expiresAt))) return json({ error: "\u5230\u671F\u65F6\u95F4\u65E0\u6548" }, 400);
+  let expiresAt = existing.expires_at;
+  if (input.expiresAt != null) {
+    const parsed = Date.parse(input.expiresAt);
+    if (!Number.isFinite(parsed)) return json({ error: "\u5230\u671F\u65F6\u95F4\u65E0\u6548" }, 400);
+    expiresAt = new Date(parsed).toISOString();
+  }
   const planId = input.planId == null ? existing.plan_id : normalizePlanId(input.planId);
   const plansList = await loadAppPlans(env, true);
   const targetPlan = plansList.find((p) => p.id === planId);
@@ -1948,13 +2118,14 @@ async function adminUpdatePlan(request, env, rawPlanId) {
   const pendingUserIds = [];
   if (input.syncUsers !== false) {
     const activeUsers = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,plan_id,dns_revision FROM users WHERE status='active' AND expires_at>datetime('now') AND COALESCE(plan_id,'trial_1d')=?").bind(planId).all();
+    const budget = createBudget(env, 180);
     for (const u of activeUsers.results || []) {
-      if ((env.__subrequests || 0) >= 25) {
+      if (budget.count >= budget.limit || budget.rateLimited) {
         pendingUserIds.push(u.id);
         continue;
       }
       try {
-        await provisionUser(env, u, { prune: true });
+        await provisionUser(env, u, { prune: true, budget });
         syncedUsers++;
       } catch {
         pendingUserIds.push(u.id);
@@ -2012,6 +2183,10 @@ async function api(request, env, url) {
     const userCount = await env.DB.prepare("SELECT COUNT(*) as count FROM users WHERE COALESCE(plan_id, 'trial_1d')=?").bind(planId).first();
     if (userCount && Number(userCount.count) > 0) {
       return json({ error: `\u8BE5\u5957\u9910\u4E0B\u4ECD\u6709 ${userCount.count} \u4F4D\u7528\u6237\u5173\u8054\uFF0C\u65E0\u6CD5\u76F4\u63A5\u5220\u9664\u3002\u8BF7\u5148\u8FC1\u79FB\u7528\u6237\u6216\u70B9\u51FB\u300C\u4E0B\u67B6\u300D\u9690\u85CF` }, 400);
+    }
+    const pendingOrders = await env.DB.prepare("SELECT COUNT(*) as count FROM app_orders WHERE plan_id=? AND status='pending'").bind(planId).first();
+    if (pendingOrders && Number(pendingOrders.count) > 0) {
+      return json({ error: `\u8BE5\u5957\u9910\u4E0B\u4ECD\u6709 ${pendingOrders.count} \u7B14\u5F85\u652F\u4ED8\u8BA2\u5355\uFF0C\u65E0\u6CD5\u76F4\u63A5\u5220\u9664\u3002\u8BF7\u5148\u70B9\u51FB\u300C\u4E0B\u67B6\u300D\u9690\u85CF` }, 400);
     }
     await env.DB.prepare("DELETE FROM plan_selected_nodes WHERE plan_id=?").bind(planId).run();
     await env.DB.prepare("DELETE FROM app_plans WHERE id=?").bind(planId).run();
@@ -2114,17 +2289,20 @@ async function api(request, env, url) {
     const activeDnsRows = await env.DB.prepare(`SELECT d.id, d.user_id, d.cloudflare_record_id, d.zone_id
       FROM user_dns_records d JOIN nodes n ON n.id = d.node_id
       WHERE n.upstream_id = ? AND d.status = 'active'`).bind(upstreamId).all();
+    const budget = createBudget(env, 180);
+    const concurrency = Math.max(1, Math.min(5, Number(env?.DNS_CONCURRENCY || 4)));
     const affectedUserIds = new Set();
     let removedDns = 0;
     for (const row of activeDnsRows.results || []) {
       affectedUserIds.add(Number(row.user_id));
-      if ((env.__subrequests || 0) < 30) {
-        try {
-          await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "");
-          removedDns++;
-        } catch {}
-      }
     }
+    await runWithConcurrency(activeDnsRows.results || [], concurrency, async (row) => {
+      if (budget.count >= budget.limit || budget.rateLimited) return;
+      try {
+        await deleteDns(env, row.zone_id || env.CF_ZONE_ID, row.cloudflare_record_id ?? "", budget);
+        removedDns++;
+      } catch {}
+    });
     if (fallback) {
       const directUsers = await env.DB.prepare("SELECT id FROM users WHERE upstream_id=? AND status='active' AND expires_at>datetime('now')").bind(upstreamId).all();
       for (const u of directUsers.results || []) affectedUserIds.add(Number(u.id));
@@ -2139,13 +2317,13 @@ async function api(request, env, url) {
     ]);
     const pendingUserIds = [];
     for (const uid of affectedUserIds) {
-      if ((env.__subrequests || 0) >= 28) {
+      if (budget.count >= budget.limit || budget.rateLimited) {
         pendingUserIds.push(uid);
         continue;
       }
       try {
         const u = await env.DB.prepare("SELECT id,name,upstream_id,expires_at,status,node_limit,plan_id,dns_revision FROM users WHERE id=? AND status='active' AND expires_at>datetime('now')").bind(uid).first();
-        if (u) await provisionUser(env, u, { prune: true });
+        if (u) await provisionUser(env, u, { prune: true, budget });
       } catch {
         pendingUserIds.push(uid);
       }
@@ -2330,7 +2508,7 @@ async function appcastResponse(request, env) {
 }
 __name(appcastResponse, "appcastResponse");
 var index_default = {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     env.__subrequests = 0;
     try {
       const url = new URL(request.url);
@@ -2340,7 +2518,7 @@ var index_default = {
         return Response.redirect(apkUrl, 302);
       }
       const paymentPath = url.pathname.replace(/\/+$/, "") || "/";
-      if (paymentPath === "/api/app/payment/notify") return appPaymentCallback(request, env);
+      if (paymentPath === "/api/app/payment/notify") return appPaymentCallback(request, env, ctx);
       if (paymentPath === "/api/app/payment/return") return appPaymentReturn(request, env);
       if (url.pathname.startsWith("/api/app/")) {
         const response = await appApi(request, env, url);
@@ -2361,7 +2539,11 @@ var index_default = {
       return json({ error: error instanceof Error ? error.message : "\u670D\u52A1\u5668\u9519\u8BEF" }, 500);
     }
   },
-  async scheduled(controller, env) {
+  async scheduled(controller, env, ctx) {
+    if (controller.cron === "*/15 * * * *") {
+      await healAndMaintain(env);
+      return;
+    }
     if (controller.cron === "7 * * * *") {
       const upstreams = await syncAllUpstreams(env);
       console.log(JSON.stringify({ event: "sync_complete", upstreams }));
