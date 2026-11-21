@@ -239,20 +239,15 @@ describe("Cloudflare Workers Paid ($5/月) 专项优化验证", () => {
     expect(validResult.expiresAt).toBe("2027-01-01T12:00:00.000Z");
   });
 
-  it("验证管理后台 HTML 嵌入脚本语法正确且无解析错误", () => {
-    const indexPath = path.resolve(__dirname, "../src/index.ts");
-    const content = fs.readFileSync(indexPath, "utf-8");
-
-    // Extract the inline admin script from admin_page_default
-    const scriptMatch = content.match(/<script>([\s\S]*?)<\\\/script>/);
+  it("验证管理后台真实渲染 HTML 嵌入脚本语法正确且无解析错误", async () => {
+    const res = await worker.fetch(new Request("https://app.5858188.xyz/"), {} as any);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/);
     expect(scriptMatch).not.toBeNull();
-    if (scriptMatch) {
-      const scriptCode = "const I = {};\nconst $" + scriptMatch[1].split("const $")[1];
-      // Test that the script evaluates as valid JavaScript syntax without throwing SyntaxError
-      expect(() => {
-        new Function(scriptCode);
-      }).not.toThrow();
-    }
+    expect(() => {
+      new Function(scriptMatch![1]);
+    }).not.toThrow();
   });
 
   it("集成测试: POST /api/users/1/reset-token 同步更新用户全部设备 subscription_token", async () => {
